@@ -106,7 +106,7 @@ function bindButtons() {
     'sh':  () => window.haInputBtn('input_button.shahid'),
     'px':  () => window.haInputBtn('input_button.plex'),
     'st':  () => window.haInputBtn('input_button.stc_tv'),
-    'mk':  () => window.boolToggle('input_boolean.radio_automation'),
+    'mk':  () => window.haBoolToggle('input_boolean.radio_automation'),
   };
   document.querySelectorAll('.app').forEach(app => {
     const cls = [...app.classList].find(c => appActions[c]);

@@ -27,7 +27,7 @@ export function connect() {
   _ws.onopen = () => console.log('🔌 Connecting to Home Assistant…');
 
   _ws.onclose = (e) => {
-    if (e.code === 4001 || e.code === 4003) {
+    if (e.code === 4001 || e.code === 4002 || e.code === 4003) {
       sessionStorage.removeItem('ha_dash_token');
       window.location.href = '/login';
       return;
