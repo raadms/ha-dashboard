@@ -4,8 +4,8 @@ FROM base AS deps
 WORKDIR /app
 COPY server/package*.json ./server/
 COPY client/package*.json ./client/
-RUN cd server && npm ci --quiet
-RUN cd client && npm ci --quiet
+RUN cd server && npm install --quiet
+RUN cd client && npm install --quiet
 
 FROM base AS builder
 WORKDIR /app
