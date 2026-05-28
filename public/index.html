@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Safrani Home — Dashboard Preview</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#07090f;
+  --g:rgba(255,255,255,0.055);
+  --gb:rgba(255,255,255,0.10);
+  --gh:rgba(255,255,255,0.10);
+  --text:#f1f5f9;
+  --muted:#64748b;
+  --muted2:#94a3b8;
+  --r:20px;--rl:26px;
+}
+html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans-serif;
+  background:var(--bg);color:var(--text);overflow:hidden;user-select:none;}
+
+/* ═══ BACKGROUND ═══ */
+#bg{position:fixed;inset:0;z-index:0;
+  background:
+    radial-gradient(ellipse 85% 55% at 5% -10%,  rgba(91,141,238,.65) 0%,transparent 48%),
+    radial-gradient(ellipse 70% 55% at 97% 105%,  rgba(167,139,250,.60) 0%,transparent 50%),
+    radial-gradient(ellipse 50% 45% at 52% 58%,  rgba(16,185,129,.22) 0%,transparent 48%),
+    radial-gradient(ellipse 45% 35% at 82% 18%,  rgba(251,191,36,.18) 0%,transparent 45%),
+    radial-gradient(ellipse 40% 30% at 18% 85%,  rgba(248,113,113,.16) 0%,transparent 45%),
+    linear-gradient(160deg,#060c1e 0%,#080514 40%,#040810 100%);
+}
+#bg::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 30% 25% at 65% 30%, rgba(6,182,212,.20) 0%,transparent 55%),
+    radial-gradient(ellipse 25% 20% at 35% 70%, rgba(251,191,36,.12) 0%,transparent 50%);
+  animation:bgpulse 8s ease-in-out infinite alternate;}
+@keyframes bgpulse{
+  0%{opacity:.6;}
+  50%{opacity:1;}
+  100%{opacity:.7;}
+}
+#bg::after{content:'';position:absolute;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='.025'/%3E%3C/svg%3E");
+  pointer-events:none;opacity:.6;}
+
+/* ═══ LAYOUT ═══ */
+#shell{position:relative;z-index:1;display:flex;flex-direction:column;height:100vh;
+  max-width:1440px;margin:0 auto;padding:0 22px;}
+
+/* ═══ CHIPS ═══ */
+#chips{display:flex;align-items:center;gap:8px;padding:16px 0 8px;flex-shrink:0;flex-wrap:wrap;}
+.chip{display:flex;align-items:center;gap:6px;padding:7px 14px;
+  background:var(--g);border:1px solid var(--gb);border-radius:50px;
+  font-size:12px;font-weight:500;cursor:pointer;backdrop-filter:blur(16px);
+  transition:all .2s;white-space:nowrap;}
+.chip:hover{background:var(--gh);transform:translateY(-1px);}
+.chip-grn{border-color:rgba(16,185,129,.35);color:#6ee7b7;}
+.chip-blu{border-color:rgba(91,141,238,.35);color:#93c5fd;}
+.chip-amb{border-color:rgba(251,191,36,.35);color:#fde68a;}
+.chip-pur{border-color:rgba(167,139,250,.35);color:#c4b5fd;}
+.chip-spacer{flex:1;}
+.clock{font-size:14px;font-weight:700;color:var(--muted2);letter-spacing:.5px;}
+
+/* ═══ GREETING ═══ */
+#greet{padding:10px 0 4px;flex-shrink:0;}
+#greet h1{font-size:30px;font-weight:800;letter-spacing:-.5px;
+  background:linear-gradient(130deg,#f1f5f9 20%,#94a3b8 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+#greet p{font-size:13px;color:var(--muted);margin-top:4px;}
+
+/* ═══ MAIN ═══ */
+#main{flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:110px;scrollbar-width:none;}
+#main::-webkit-scrollbar{display:none;}
+
+.sh{display:flex;align-items:center;justify-content:space-between;padding:20px 0 10px;}
+.sh h2{font-size:15px;font-weight:700;}
+.sh a{font-size:12px;color:#5b8dee;cursor:pointer;}
+
+/* ═══ STATUS ROW ═══ */
+.srow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.sc{display:flex;align-items:center;gap:10px;padding:14px;
+  background:var(--g);border:1px solid var(--gb);border-radius:var(--r);
+  backdrop-filter:blur(14px);cursor:pointer;transition:all .2s;}
+.sc:hover{background:var(--gh);transform:translateY(-2px);}
+.sico{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.si-b{background:rgba(91,141,238,.2);}
+.si-g{background:rgba(16,185,129,.2);}
+.si-a{background:rgba(251,191,36,.2);}
+.si-p{background:rgba(167,139,250,.2);}
+.si-r{background:rgba(248,113,113,.2);}
+.sv{font-size:17px;font-weight:700;}
+.sl{font-size:11px;color:var(--muted);margin-top:1px;}
+
+/* ═══ ROOMS GRID ═══ */
+.rg{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+@media(max-width:1100px){.rg{grid-template-columns:repeat(3,1fr);}}
+
+.room{position:relative;border-radius:var(--rl);padding:18px 16px 14px;
+  cursor:pointer;overflow:hidden;min-height:140px;
+  display:flex;flex-direction:column;justify-content:space-between;
+  border:1px solid rgba(255,255,255,.07);backdrop-filter:blur(18px);
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s;}
+.room:hover{transform:translateY(-5px) scale(1.015);}
+.room:active{transform:scale(.97);}
+
+/* per-room color themes */
+.r-living {background:linear-gradient(148deg,rgba(22,50,100,.85),rgba(9,22,50,.9));border-color:rgba(91,141,238,.4);box-shadow:0 4px 28px rgba(91,141,238,.12);}
+.r-bed    {background:linear-gradient(148deg,rgba(70,30,110,.85),rgba(35,12,60,.9));border-color:rgba(167,139,250,.4);box-shadow:0 4px 28px rgba(167,139,250,.12);}
+.r-kit    {background:linear-gradient(148deg,rgba(90,50,10,.85),rgba(45,22,5,.9));border-color:rgba(251,191,36,.4);box-shadow:0 4px 28px rgba(251,191,36,.10);}
+.r-office {background:linear-gradient(148deg,rgba(8,80,90,.85),rgba(4,40,50,.9));border-color:rgba(6,182,212,.4);box-shadow:0 4px 28px rgba(6,182,212,.12);}
+.r-baby   {background:linear-gradient(148deg,rgba(100,20,50,.75),rgba(55,8,28,.9));border-color:rgba(251,113,133,.4);box-shadow:0 4px 28px rgba(251,113,133,.10);}
+.r-guest  {background:linear-gradient(148deg,rgba(5,80,55,.85),rgba(3,40,28,.9));border-color:rgba(16,185,129,.4);box-shadow:0 4px 28px rgba(16,185,129,.12);}
+.r-hall   {background:linear-gradient(148deg,rgba(30,30,55,.75),rgba(15,15,30,.9));border-color:rgba(148,163,184,.3);}
+.r-laundry{background:linear-gradient(148deg,rgba(90,20,20,.75),rgba(45,8,8,.9));border-color:rgba(248,113,113,.35);box-shadow:0 4px 28px rgba(248,113,113,.10);}
+.r-off    {background:rgba(12,14,24,.75);border-color:rgba(255,255,255,.06);}
+
+.glow{position:absolute;top:-50%;right:-20%;width:140px;height:140px;border-radius:50%;pointer-events:none;}
+.r-living .glow{background:radial-gradient(circle,rgba(91,141,238,.40),transparent);}
+.r-bed    .glow{background:radial-gradient(circle,rgba(167,139,250,.35),transparent);}
+.r-kit    .glow{background:radial-gradient(circle,rgba(251,191,36,.35),transparent);}
+.r-office .glow{background:radial-gradient(circle,rgba(6,182,212,.35),transparent);}
+.r-baby   .glow{background:radial-gradient(circle,rgba(251,113,133,.35),transparent);}
+.r-guest  .glow{background:radial-gradient(circle,rgba(16,185,129,.40),transparent);}
+.r-laundry .glow{background:radial-gradient(circle,rgba(248,113,113,.35),transparent);}
+.r-hall   .glow{background:radial-gradient(circle,rgba(148,163,184,.20),transparent);}
+.r-off    .glow{opacity:0;}
+
+.rt{display:flex;align-items:flex-start;justify-content:space-between;}
+.rico{width:48px;height:48px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:24px;transition:all .25s;}
+.r-living .rico{background:rgba(91,141,238,.25);}
+.r-bed    .rico{background:rgba(167,139,250,.25);}
+.r-kit    .rico{background:rgba(251,191,36,.22);}
+.r-office .rico{background:rgba(6,182,212,.22);}
+.r-baby   .rico{background:rgba(251,113,133,.22);}
+.r-guest  .rico{background:rgba(16,185,129,.22);}
+.r-laundry .rico{background:rgba(248,113,113,.22);}
+.r-hall   .rico{background:rgba(148,163,184,.18);}
+.r-off    .rico{background:rgba(255,255,255,.07);}
+
+.rbadges{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;}
+.rb{padding:3px 9px;border-radius:50px;font-size:10px;font-weight:600;backdrop-filter:blur(8px);}
+.rb-on {background:rgba(91,141,238,.20);color:#93c5fd;border:1px solid rgba(91,141,238,.28);}
+.rb-ac {background:rgba(56,189,248,.18);color:#7dd3fc;border:1px solid rgba(56,189,248,.28);}
+.rb-grn{background:rgba(16,185,129,.18);color:#6ee7b7;border:1px solid rgba(16,185,129,.28);}
+.rb-off{background:rgba(255,255,255,.07);color:var(--muted);}
+
+.rname{font-size:14px;font-weight:700;margin-top:12px;}
+.rmeta{font-size:11px;color:var(--muted2);margin-top:2px;}
+.rbtns{display:flex;gap:6px;margin-top:10px;}
+.rbtn{flex:1;padding:7px 4px;border-radius:10px;border:none;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:3px;}
+.rbtn:hover{filter:brightness(1.3);}
+.rbtn-b{background:rgba(91,141,238,.22);color:#93c5fd;}
+.rbtn-p{background:rgba(167,139,250,.22);color:#c4b5fd;}
+.rbtn-a{background:rgba(251,191,36,.18);color:#fde68a;}
+.rbtn-c{background:rgba(6,182,212,.20);color:#67e8f9;}
+.rbtn-r{background:rgba(251,113,133,.20);color:#fda4af;}
+.rbtn-g{background:rgba(16,185,129,.18);color:#6ee7b7;}
+.rbtn-off{background:rgba(255,255,255,.07);color:var(--muted);}
+
+/* ═══ MEDIA ═══ */
+.mrow{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;}
+.mc{background:var(--g);border:1px solid var(--gb);border-radius:var(--rl);padding:18px;backdrop-filter:blur(18px);cursor:pointer;transition:all .2s;}
+.mc:hover{background:var(--gh);transform:translateY(-2px);}
+.mc-tv{background:linear-gradient(148deg,rgba(9,22,55,.85),rgba(18,40,80,.85));border-color:rgba(91,141,238,.28);}
+.mc-hp{border-color:rgba(249,115,22,.25);}
+.mc-atv{background:linear-gradient(148deg,rgba(10,10,22,.85),rgba(18,18,35,.85));border-color:rgba(148,163,184,.2);}
+.mlbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;}
+.mtit{font-size:15px;font-weight:700;margin-top:5px;}
+.msub{font-size:12px;color:var(--muted);margin-top:2px;}
+.mctr{display:flex;gap:8px;margin-top:14px;align-items:center;}
+.mcc{width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,.10);color:white;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.mcc:hover{background:rgba(255,255,255,.22);}
+.mcc.play{background:#5b8dee;width:42px;height:42px;font-size:17px;}
+.vol{flex:1;height:4px;background:rgba(255,255,255,.12);border-radius:2px;overflow:hidden;}
+.volf{height:100%;border-radius:2px;background:#5b8dee;width:65%;}
+
+/* ═══ APPS STRIP ═══ */
+.apps{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;}
+.apps::-webkit-scrollbar{display:none;}
+.app{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:13px 18px;background:var(--g);border:1px solid var(--gb);
+  border-radius:16px;cursor:pointer;transition:all .2s;min-width:72px;}
+.app:hover{transform:translateY(-3px);background:var(--gh);}
+.ai{width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ai svg{width:38px;height:38px;display:block;}
+.an{font-size:10px;color:var(--muted);font-weight:500;}
+.app.nf{border-color:rgba(229,9,20,.35);}
+.app.yt{border-color:rgba(255,0,0,.30);}
+.app.sh{border-color:rgba(124,58,237,.35);}
+.app.px{border-color:rgba(229,160,13,.35);}
+.app.mk{border-color:rgba(16,185,129,.35);}
+.app.st{border-color:rgba(37,99,235,.35);}
+
+/* ═══ SECURITY / CLIMATE / TV ═══ */
+.cam-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.cam{background:rgba(0,0,0,.45);border:1px solid var(--gb);border-radius:var(--rl);overflow:hidden;cursor:pointer;aspect-ratio:16/9;position:relative;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.cam:hover{border-color:rgba(91,141,238,.4);transform:scale(1.015);}
+.cam-ph{font-size:52px;color:rgba(255,255,255,.10);}
+.cam-lbl{position:absolute;bottom:10px;left:12px;font-size:12px;font-weight:600;background:rgba(0,0,0,.72);padding:4px 11px;border-radius:50px;}
+.cam-live{position:absolute;top:10px;right:12px;font-size:10px;font-weight:700;color:#f87171;background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.4);padding:3px 9px;border-radius:50px;display:flex;align-items:center;gap:5px;}
+.dlive{width:6px;height:6px;background:#f87171;border-radius:50%;animation:blink 1.2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.12}}
+.alm-box{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:var(--rl);padding:22px;display:flex;align-items:center;justify-content:space-between;}
+.alm-s{font-size:24px;font-weight:800;color:#4ade80;margin-top:4px;}
+.alm-btns{display:flex;flex-direction:column;gap:8px;}
+.alm-btn{padding:10px 22px;border-radius:12px;border:none;font-weight:700;cursor:pointer;font-size:13px;transition:all .15s;}
+.alm-btn:hover{filter:brightness(1.2);}
+.alm-away{background:rgba(239,68,68,.2);color:#f87171;}
+.alm-home{background:rgba(251,191,36,.18);color:#fde68a;}
+.sensor-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.sensor{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:50px;font-size:12px;font-weight:500;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);}
+.dot{width:8px;height:8px;border-radius:50%;}
+.dok{background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.5);}
+.dwarn{background:#fb923c;box-shadow:0 0 6px rgba(251,146,60,.5);}
+
+.cg{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+.ac{border-radius:var(--rl);padding:20px;cursor:pointer;transition:all .22s;}
+.ac:hover{transform:translateY(-4px);}
+.ac-lr{background:linear-gradient(148deg,rgba(9,26,58,.85),rgba(18,42,78,.85));border:1px solid rgba(56,189,248,.25);box-shadow:0 6px 30px rgba(56,189,248,.08);}
+.ac-bd{background:linear-gradient(148deg,rgba(38,12,68,.85),rgba(20,5,40,.85));border:1px solid rgba(167,139,250,.25);box-shadow:0 6px 30px rgba(167,139,250,.08);}
+.ac-of{background:linear-gradient(148deg,rgba(4,50,60,.85),rgba(2,26,32,.85));border:1px solid rgba(6,182,212,.25);}
+.ac-ln{background:linear-gradient(148deg,rgba(60,12,12,.85),rgba(30,5,5,.85));border:1px solid rgba(248,113,113,.25);}
+.ach{display:flex;justify-content:space-between;align-items:flex-start;}
+.acname{font-size:14px;font-weight:700;}
+.badge{padding:4px 11px;border-radius:50px;font-size:11px;font-weight:600;}
+.badge-c{background:rgba(56,189,248,.18);color:#38bdf8;border:1px solid rgba(56,189,248,.28);}
+.badge-p{background:rgba(167,139,250,.18);color:#a78bfa;border:1px solid rgba(167,139,250,.28);}
+.badge-off{background:rgba(255,255,255,.07);color:var(--muted);}
+.actemp{font-size:46px;font-weight:900;margin:10px 0 4px;line-height:1;}
+.acsub{font-size:12px;color:var(--muted);}
+.acctr{display:flex;gap:7px;margin-top:14px;}
+.acbtn{flex:1;padding:9px;border-radius:12px;border:none;background:rgba(255,255,255,.07);color:white;font-size:17px;cursor:pointer;transition:all .15s;}
+.acbtn:hover{background:rgba(255,255,255,.18);}
+.acbtn.on-c{background:rgba(56,189,248,.24);color:#38bdf8;}
+.acbtn.on-p{background:rgba(167,139,250,.24);color:#a78bfa;}
+
+.tv-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;}
+.rbox{background:linear-gradient(180deg,rgba(9,22,52,.88),rgba(4,10,24,.92));border:1px solid rgba(91,141,238,.2);border-radius:var(--rl);padding:24px;}
+.rtitle{text-align:center;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:18px;}
+.dpad{display:grid;grid-template-columns:repeat(3,54px);gap:8px;justify-content:center;}
+.rk{display:flex;align-items:center;justify-content:center;height:50px;border-radius:14px;border:none;background:rgba(255,255,255,.08);color:white;font-size:17px;cursor:pointer;transition:all .15s;width:100%;}
+.rk:hover{background:rgba(255,255,255,.18);transform:scale(1.06);}
+.rk:active{transform:scale(.92);}
+.rk.ok{background:#5b8dee;font-size:13px;font-weight:700;border-radius:50%;}
+.rk.sp{background:transparent;cursor:default;pointer-events:none;}
+.rrow{display:flex;gap:9px;justify-content:center;margin-top:13px;}
+.rk2{padding:10px 16px;border-radius:12px;border:none;background:rgba(255,255,255,.08);color:white;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
+.rk2:hover{background:rgba(255,255,255,.18);}
+.tright{display:flex;flex-direction:column;gap:12px;}
+.tagrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.ta{display:flex;flex-direction:column;align-items:center;gap:7px;padding:15px 10px;border-radius:15px;cursor:pointer;transition:all .18s;background:var(--g);border:1px solid var(--gb);font-size:10.5px;color:var(--muted);font-weight:500;}
+.ta:hover{transform:translateY(-3px);background:var(--gh);}
+.ta-ico{width:38px;height:38px;display:flex;align-items:center;justify-content:center;}
+.ta-ico svg{width:38px;height:38px;display:block;}
+.ta.nf{border-color:rgba(229,9,20,.35);}.ta.yt{border-color:rgba(255,0,0,.30);}
+.ta.sh{border-color:rgba(124,58,237,.35);}.ta.px{border-color:rgba(229,160,13,.35);}
+.ta.st{border-color:rgba(37,99,235,.35);}.ta.mk{border-color:rgba(16,185,129,.35);}
+.hp-box{background:rgba(249,115,22,.07);border:1px solid rgba(249,115,22,.22);border-radius:16px;padding:16px;}
+
+/* ═══ PAGE SYSTEM ═══ */
+.page{display:none;}
+.page.active{display:block;}
+
+/* ═══ BOTTOM NAV ═══ */
+#nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:1440px;padding:0 22px 18px;z-index:100;}
+.navp{display:flex;justify-content:space-around;background:rgba(7,9,15,.90);backdrop-filter:blur(30px) saturate(200%);border:1px solid rgba(255,255,255,.10);border-radius:30px;padding:6px 8px;box-shadow:0 -2px 40px rgba(0,0,0,.6),0 8px 30px rgba(0,0,0,.5);}
+.ni{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 22px;border-radius:22px;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted);transition:all .2s;min-width:72px;}
+.ni.active{color:#5b8dee;background:rgba(91,141,238,.13);}
+.ni:not(.active):hover{color:var(--text);background:rgba(255,255,255,.05);}
+.ni svg{width:22px;height:22px;}
+
+/* ═══ POPUP ═══ */
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,0);z-index:200;pointer-events:none;transition:background .3s,backdrop-filter .3s;}
+#overlay.open{background:rgba(0,0,0,.72);pointer-events:all;backdrop-filter:blur(6px);}
+#popup{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(105%);
+  width:100%;max-width:900px;max-height:86vh;overflow-y:auto;
+  background:#0a0d18;border:1px solid rgba(255,255,255,.10);
+  border-radius:28px 28px 0 0;z-index:201;padding:0 26px 40px;
+  box-shadow:0 -24px 80px rgba(0,0,0,.8);
+  transition:transform .42s cubic-bezier(.32,1.25,.64,1);scrollbar-width:none;}
+#popup::-webkit-scrollbar{display:none;}
+#popup.open{transform:translateX(-50%) translateY(0);}
+
+.ph{width:40px;height:4px;background:rgba(255,255,255,.18);border-radius:2px;margin:14px auto 0;}
+.phd{display:flex;align-items:center;justify-content:space-between;padding:20px 0 16px;border-bottom:1px solid rgba(255,255,255,.07);}
+.pti{display:flex;align-items:center;gap:14px;}
+.pico{width:56px;height:56px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;}
+.pti h2{font-size:22px;font-weight:800;}
+.pti p{font-size:13px;color:var(--muted);margin-top:2px;}
+.px-btn{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);border:none;color:var(--muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.px-btn:hover{background:rgba(255,255,255,.16);color:white;}
+
+/* ── Popup section label ── */
+.psec{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.9px;margin:22px 0 10px;font-weight:600;}
+
+/* ── Popup control grid ── */
+.pc{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:0;}
+.ctrl{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:18px;cursor:pointer;transition:all .2s;}
+.ctrl:hover{background:rgba(255,255,255,.09);}
+.ctrl.full{grid-column:1/-1;}
+.ctrl.accent-b{border-color:rgba(91,141,238,.25);background:rgba(91,141,238,.07);}
+.ctrl.accent-g{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.07);}
+.ctrl.accent-r{border-color:rgba(248,113,113,.25);background:rgba(248,113,113,.07);}
+.ctrl.accent-p{border-color:rgba(167,139,250,.25);background:rgba(167,139,250,.07);}
+.ctrl.accent-c{border-color:rgba(6,182,212,.25);background:rgba(6,182,212,.07);}
+.ctrl.accent-a{border-color:rgba(251,191,36,.25);background:rgba(251,191,36,.07);}
+.clbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;}
+.cval{font-size:22px;font-weight:800;}
+.csub{font-size:12px;color:var(--muted);margin-top:4px;}
+.crow{display:flex;align-items:center;justify-content:space-between;}
+
+/* Toggle */
+.tog{width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;transition:background .3s;flex-shrink:0;}
+.tog.on{background:#5b8dee;}
+.tog.off{background:rgba(255,255,255,.15);}
+.tog::after{content:'';position:absolute;top:4px;width:20px;height:20px;border-radius:50%;background:white;transition:left .3s cubic-bezier(.34,1.56,.64,1);}
+.tog.on::after{left:28px;}
+.tog.off::after{left:4px;}
+
+/* Colored toggles */
+.tog-g.on{background:#10b981;}
+.tog-p.on{background:#a78bfa;}
+.tog-c.on{background:#06b6d4;}
+
+/* Temp display */
+.tempd{display:flex;align-items:baseline;gap:4px;}
+.tbig{font-size:44px;font-weight:900;}
+.tunit{font-size:18px;color:var(--muted);}
+.tslider{width:100%;margin-top:12px;-webkit-appearance:none;height:6px;border-radius:3px;outline:none;}
+.tslider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;cursor:pointer;}
+
+/* Script / action buttons */
+.script-grid{display:grid;gap:8px;margin-top:4px;}
+.script-grid.cols2{grid-template-columns:1fr 1fr;}
+.script-grid.cols3{grid-template-columns:1fr 1fr 1fr;}
+.sbtn{padding:11px 14px;border-radius:13px;border:none;font-size:12px;font-weight:700;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.sbtn:hover{filter:brightness(1.25);transform:scale(1.03);}
+.sbtn:active{transform:scale(.96);}
+.sbtn-g{background:linear-gradient(135deg,rgba(5,70,48,.9),rgba(16,185,129,.3));color:#6ee7b7;border:1px solid rgba(16,185,129,.35);}
+.sbtn-r{background:linear-gradient(135deg,rgba(80,10,10,.9),rgba(239,68,68,.25));color:#fca5a5;border:1px solid rgba(239,68,68,.35);}
+.sbtn-b{background:linear-gradient(135deg,rgba(10,30,80,.9),rgba(91,141,238,.25));color:#93c5fd;border:1px solid rgba(91,141,238,.35);}
+.sbtn-a{background:linear-gradient(135deg,rgba(80,55,5,.9),rgba(251,191,36,.25));color:#fde68a;border:1px solid rgba(251,191,36,.35);}
+.sbtn-p{background:linear-gradient(135deg,rgba(50,15,80,.9),rgba(167,139,250,.25));color:#c4b5fd;border:1px solid rgba(167,139,250,.35);}
+.sbtn-c{background:linear-gradient(135deg,rgba(4,50,70,.9),rgba(6,182,212,.25));color:#67e8f9;border:1px solid rgba(6,182,212,.35);}
+
+/* ═══ BATTERY NOTIFICATIONS ═══ */
+#notif-bar{padding:0 0 4px;flex-shrink:0;}
+.nb-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.nb-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);}
+.nb-dismiss-all{font-size:11px;color:#5b8dee;cursor:pointer;padding:3px 10px;border-radius:20px;background:rgba(91,141,238,.1);border:none;color:#93c5fd;}
+.nb-dismiss-all:hover{background:rgba(91,141,238,.22);}
+.notif-wrap{display:flex;flex-direction:column;gap:7px;}
+.notif-card{display:flex;align-items:center;gap:12px;padding:11px 15px;border-radius:14px;
+  animation:nfSlide .35s cubic-bezier(.34,1.56,.64,1);}
+.notif-crit{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.32);box-shadow:0 2px 16px rgba(239,68,68,.10);}
+.notif-warn{background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.30);box-shadow:0 2px 16px rgba(251,191,36,.08);}
+.notif-ico{font-size:22px;flex-shrink:0;}
+.notif-body{flex:1;min-width:0;}
+.notif-title{font-size:13px;font-weight:700;}
+.notif-sub{font-size:11px;color:var(--muted2);margin-top:1px;}
+.notif-batt{display:flex;align-items:center;gap:7px;margin-top:5px;}
+.batt-bar{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;}
+.batt-fill-crit{height:100%;border-radius:3px;background:linear-gradient(90deg,#ef4444,#f87171);}
+.batt-fill-warn{height:100%;border-radius:3px;background:linear-gradient(90deg,#d97706,#fbbf24);}
+.batt-pct{font-size:11px;font-weight:700;white-space:nowrap;}
+.batt-pct-crit{color:#f87171;}
+.batt-pct-warn{color:#fbbf24;}
+.notif-x{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.07);
+  border:none;color:var(--muted);font-size:13px;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.notif-x:hover{background:rgba(255,255,255,.18);color:white;}
+@keyframes nfSlide{from{opacity:0;transform:translateX(-12px);}to{opacity:1;transform:translateX(0);}}
+.notif-card.hiding{animation:nfHide .25s ease forwards;}
+@keyframes nfHide{to{opacity:0;transform:translateX(20px);max-height:0;padding:0;margin:0;overflow:hidden;}}
+
+/* Bell badge on chip */
+.chip-bell{position:relative;}
+.chip-bell .nbadge{position:absolute;top:-4px;right:-4px;width:16px;height:16px;
+  border-radius:50%;background:#ef4444;font-size:9px;font-weight:800;color:white;
+  display:flex;align-items:center;justify-content:center;border:2px solid #07090f;}
+
+/* Scenes */
+.scenes{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+.scene{padding:8px 16px;border-radius:50px;border:none;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
+.scene.on{background:#5b8dee;color:white;}
+.scene.off{background:rgba(255,255,255,.08);color:var(--muted);}
+.scene:hover:not(.on){background:rgba(255,255,255,.15);color:white;}
+
+/* Light sub-switches */
+.light-sw{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+.light-sw:last-child{border-bottom:none;}
+.lsw-name{font-size:13px;font-weight:500;}
+.lsw-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="shell">
+
+<!-- ══ CHIPS ══ -->
+<div id="chips">
+  <div class="chip chip-grn">🛡️ Disarmed</div>
+  <div class="chip chip-blu">☀️ 32°C · Clear</div>
+  <div class="chip chip-grn">🔒 Locked</div>
+  <div class="chip chip-amb" id="prayer-chip">🕌 …</div>
+  <div class="chip chip-pur">👤 Raed · Home &nbsp;|&nbsp; Rola · Away</div>
+  <div class="chip-spacer"></div>
+  <div class="chip chip-bell" onclick="scrollToNotifs()" title="Battery Alerts">
+    🔔 <span class="nbadge">3</span>
+  </div>
+  <div class="clock" id="clk">--:--</div>
+</div>
+
+<!-- ══ BATTERY NOTIFICATIONS ══ -->
+<div id="notif-bar">
+  <div class="nb-header">
+    <div class="nb-title">🔋 Battery Alerts</div>
+    <button class="nb-dismiss-all" onclick="dismissAll()">Dismiss All</button>
+  </div>
+  <div class="notif-wrap" id="notif-wrap">
+
+    <div class="notif-card notif-crit" id="nf-ipad3">
+      <div class="notif-ico">📱</div>
+      <div class="notif-body">
+        <div class="notif-title">iPad (3) — Critical Battery</div>
+        <div class="notif-sub">Not Charging · sensor.ipad_3_battery_level</div>
+        <div class="notif-batt">
+          <div class="batt-bar"><div class="batt-fill-crit" style="width:1%"></div></div>
+          <div class="batt-pct batt-pct-crit">1%</div>
+        </div>
+      </div>
+      <button class="notif-x" onclick="dismissNotif('nf-ipad3')">✕</button>
+    </div>
+
+    <div class="notif-card notif-crit" id="nf-brush">
+      <div class="notif-ico">🪥</div>
+      <div class="notif-body">
+        <div class="notif-title">Toothbrush (Genius D701) — Critical Battery</div>
+        <div class="notif-sub">sensor.smart_series_9000_10000_0cf5_battery</div>
+        <div class="notif-batt">
+          <div class="batt-bar"><div class="batt-fill-crit" style="width:8%"></div></div>
+          <div class="batt-pct batt-pct-crit">8%</div>
+        </div>
+      </div>
+      <button class="notif-x" onclick="dismissNotif('nf-brush')">✕</button>
+    </div>
+
+    <div class="notif-card notif-warn" id="nf-rola1">
+      <div class="notif-ico">📱</div>
+      <div class="notif-body">
+        <div class="notif-title">Rola1 iPhone — Low Battery</div>
+        <div class="notif-sub">Not Charging · sensor.rola1_battery_level</div>
+        <div class="notif-batt">
+          <div class="batt-bar"><div class="batt-fill-warn" style="width:35%"></div></div>
+          <div class="batt-pct batt-pct-warn">35%</div>
+        </div>
+      </div>
+      <button class="notif-x" onclick="dismissNotif('nf-rola1')">✕</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ GREETING ══ -->
+<div id="greet">
+  <h1>Good Evening, Raed 👋</h1>
+  <p>Saturday · 3 rooms active · Living Room & Bedroom AC cooling</p>
+</div>
+
+<div id="main">
+
+<!-- ════════════════ HOME PAGE ════════════════ -->
+<div class="page active" id="page-home">
+
+  <div class="sh"><h2>Home Status</h2></div>
+  <div class="srow">
+    <div class="sc"><div class="sico si-b">💡</div><div><div class="sv">4 On</div><div class="sl">Lights Active</div></div></div>
+    <div class="sc"><div class="sico si-b">❄️</div><div><div class="sv">23°C</div><div class="sl">Living Room AC</div></div></div>
+    <div class="sc"><div class="sico si-g">👥</div><div><div class="sv">Raed</div><div class="sl">Home · Rola Away</div></div></div>
+    <div class="sc"><div class="sico si-a">💧</div><div><div class="sv">On</div><div class="sl">Water Filter</div></div></div>
+  </div>
+
+  <div class="sh"><h2>Rooms</h2><a onclick="alert('All lights off!')">All Off</a></div>
+  <div class="rg">
+
+    <!-- Living Room -->
+    <div class="room r-living" onclick="pop('lr')">
+      <div class="glow"></div>
+      <div class="rt"><div class="rico">🛋️</div>
+        <div class="rbadges"><span class="rb rb-ac">❄️ 23°</span><span class="rb rb-on">💡 On</span></div>
+      </div>
+      <div><div class="rname">Living Room</div><div class="rmeta">3 lights · AC · TV · LED</div>
+        <div class="rbtns"><button class="rbtn rbtn-b" onclick="E(event)">💡 On</button><button class="rbtn rbtn-b" onclick="E(event)">❄️ 23°</button><button class="rbtn rbtn-b" onclick="E(event)">📺 TV</button></div>
+      </div>
+    </div>
+
+    <!-- Master Bedroom -->
+    <div class="room r-bed" onclick="pop('bd')">
+      <div class="glow"></div>
+      <div class="rt"><div class="rico">🛏️</div>
+        <div class="rbadges"><span class="rb rb-ac">❄️ 22°</span><span class="rb rb-on" style="border-color:rgba(167,139,250,.28);background:rgba(167,139,250,.18);color:#c4b5fd;">💡 On</span></div>
+      </div>
+      <div><div class="rname">Master Bedroom</div><div class="rmeta">5 lights · AC · Bath</div>
+        <div class="rbtns"><button class="rbtn rbtn-p" onclick="E(event)">💡 On</button><button class="rbtn rbtn-b" onclick="E(event)">❄️ 22°</button></div>
+      </div>
+    </div>
+
+    <!-- Kitchen -->
+    <div class="room r-off" onclick="pop('kt')">
+      <div class="glow"></div>
+      <div class="rt"><div class="rico" style="background:rgba(251,191,36,.12);">🍳</div>
+        <div class="rbadges"><span class="rb rb-off">Off</span></div>
+      </div>
+      <div><div class="rname">Kitchen</div><div class="rmeta">2 lights · off</div>
+        <div class="rbtns"><button class="rbtn rbtn-off" onclick="E(event)">💡 Off</button></div>
+      </div>
+    </div>
+
+    <!-- Office -->
+    <div class="room r-office" onclick="pop('of')">
+      <div class="glow"></div>
+      <div class="rt"><div class="rico">💼</div>
+        <div class="rbadges"><span class="rb rb-on" style="border-color:rgba(6,182,212,.28);background:rgba(6,182,212,.18);color:#67e8f9;">💡 On</span></div>
+      </div>
+      <div><div class="rname">Office</div><div class="rmeta">2 lights on · AC standby</div>
+        <div class="rbtns"><button class="rbtn rbtn-c" onclick="E(event)">💡 On</button><button class="rbtn rbtn-off" onclick="E(event)">❄️ Off</button></div>
+      </div>
+    </div>
+
+    <!-- Baby Room -->
+    <div class="room r-baby" onclick="pop('br')">
+      <div class="glow"></div>
+      <div class="rt"><div class="rico">👶</div>
+        <div class="rbadges"><span class="rb" style="border-color:rgba(251,113,133,.28);background:rgba(251,113,133,.18);color:#fda4af;">🌙 Night</span><span class="rb rb-ac">❄️ AC</span></div>
+      </div>
+      <div><div class="rname">Baby Room</div><div class="rmeta">3 lights · AC standby</div>
+        <div class="rbtns"><button class="rbtn rbtn-r" onclick="E(event)">💡 Nightlight</button><button class="rbtn rbtn-off" onclick="E(event)">❄️ Off</button></div>
+      </div>
+    </div>
+
+    <!-- Guest Room -->
+    <div class="room r-guest" onclick="pop('gr')">
+      <div class="glow"></div>
+      <div class="rt"><div class="rico">🚪</div>
+        <div class="rbadges"><span class="rb rb-off">Off</span></div>
+      </div>
+      <div><div class="rname">Guest Room</div><div class="rmeta">3 lights · IR AC via scripts</div>
+        <div class="rbtns"><button class="rbtn rbtn-off" onclick="E(event)">💡 Off</button><button class="rbtn rbtn-off" onclick="E(event)">❄️ Off</button></div>
+      </div>
+    </div>
+
+    <!-- Hallway -->
+    <div class="room r-hall" onclick="pop('hw')">
+      <div class="glow"></div>
+      <div class="rt"><div class="rico">🏠</div>
+        <div class="rbadges"><span class="rb rb-off">Off</span></div>
+      </div>
+      <div><div class="rname">Hallway</div><div class="rmeta">Entrance · Corridor · Between</div>
+        <div class="rbtns"><button class="rbtn rbtn-off" onclick="E(event)">💡 Off</button></div>
+      </div>
+    </div>
+
+    <!-- Laundry -->
+    <div class="room r-laundry" onclick="pop('ln')">
+      <div class="glow"></div>
+      <div class="rt"><div class="rico">🧺</div>
+        <div class="rbadges"><span class="rb rb-off">Off</span></div>
+      </div>
+      <div><div class="rname">Laundry</div><div class="rmeta">2 lights · AC standby</div>
+        <div class="rbtns"><button class="rbtn rbtn-off" onclick="E(event)">💡 Off</button><button class="rbtn rbtn-off" onclick="E(event)">❄️ Off</button></div>
+      </div>
+    </div>
+
+  </div><!-- /rooms -->
+
+  <div class="sh"><h2>Now Playing</h2></div>
+  <div class="mrow">
+    <div class="mc mc-tv"><div class="mlbl">LG TV · Living Room</div><div class="mtit">Netflix — Playing</div><div class="msub">Vol 55% · On</div>
+      <div class="mctr"><button class="mcc">⏮</button><button class="mcc play">⏸</button><button class="mcc">⏭</button><div class="vol"><div class="volf"></div></div><button class="mcc">🔇</button></div>
+    </div>
+    <div class="mc mc-atv"><div class="mlbl">Apple TV</div><div class="mtit">Paused</div><div class="msub">Tap for remote</div>
+      <div class="mctr"><button class="mcc">⏯</button><button class="mcc">⏹</button></div>
+    </div>
+    <div class="mc mc-hp" id="radio-card">
+      <div class="mlbl">HomePod Mini · 📻 Radio</div>
+      <div class="mtit" id="radio-title">📻 Radio — Off</div>
+      <div class="msub" id="radio-sub">input_boolean.radio_automation</div>
+      <div class="mctr" style="margin-top:12px;align-items:center;gap:12px;">
+        <span style="font-size:12px;color:var(--muted);font-weight:600;">OFF</span>
+        <button class="tog off" id="radio-tog" style="flex-shrink:0;" onclick="toggleRadio()"></button>
+        <span style="font-size:12px;color:var(--muted);font-weight:600;">ON</span>
+        <div style="flex:1"></div>
+        <button class="mcc">⏯</button>
+        <button class="mcc">🔇</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sh"><h2>Quick Launch</h2></div>
+  <div class="apps">
+
+    <!-- Netflix -->
+    <div class="app nf"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#E50914"/><path fill-rule="evenodd" d="M7 7h5.5L23.5 29H29V7h-5.5L12.5 29H7Z" fill="white"/></svg></span><span class="an">Netflix</span></div>
+
+    <!-- YouTube -->
+    <div class="app yt"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#FF0000"/><rect x="5" y="9" width="26" height="18" rx="5" fill="white"/><polygon points="14,13 14,23 25,18" fill="#FF0000"/></svg></span><span class="an">YouTube</span></div>
+
+    <!-- Shahid -->
+    <div class="app sh"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="shg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0E1C7A"/><stop offset="100%" stop-color="#1AACCE"/></linearGradient></defs><rect width="36" height="36" rx="7" fill="url(#shg)"/><polygon points="13,10 13,26 27,18" fill="white"/><rect x="13" y="26" width="10" height="2.5" rx="1.25" fill="rgba(255,255,255,.4)"/></svg></span><span class="an">Shahid</span></div>
+
+    <!-- Plex -->
+    <div class="app px"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#1F1F1F"/><path d="M9 8h6L26 18 15 28H9l10-10Z" fill="#E5A00D"/></svg></span><span class="an">Plex</span></div>
+
+    <!-- STC TV -->
+    <div class="app st"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="stg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6E0FBF"/><stop offset="100%" stop-color="#3B0870"/></linearGradient></defs><rect width="36" height="36" rx="7" fill="url(#stg)"/><text x="18" y="16.5" text-anchor="middle" fill="white" font-size="10" font-family="Arial,sans-serif" font-weight="900">STC</text><text x="18" y="27.5" text-anchor="middle" fill="white" font-size="10" font-family="Arial,sans-serif" font-weight="900">tv</text></svg></span><span class="an">STC TV</span></div>
+
+    <!-- Radio toggle -->
+    <div class="app mk" id="radio-app" onclick="toggleRadio()" style="position:relative;">
+      <span class="ai" id="radio-app-ico"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#052e16"/><rect x="8" y="21" width="20" height="10" rx="2.5" fill="none" stroke="#4ade80" stroke-width="1.6"/><circle cx="14" cy="26" r="2.5" fill="none" stroke="#4ade80" stroke-width="1.6"/><line x1="20" y1="24" x2="27" y2="24" stroke="#4ade80" stroke-width="1.3" stroke-linecap="round"/><line x1="20" y1="27" x2="27" y2="27" stroke="#4ade80" stroke-width="1.3" stroke-linecap="round"/><path d="M11 17c2-3 12-3 14 0" fill="none" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"/><path d="M7 13c4-6 18-6 22 0" fill="none" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+      <span class="an" id="radio-app-lbl">Radio Off</span>
+      <span id="radio-app-dot" style="position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:#6b7280;"></span>
+    </div>
+
+    <!-- Movie Light -->
+    <div class="app" style="border-color:rgba(167,139,250,.35);"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#1C0533"/><rect x="6" y="11" width="24" height="14" rx="2.5" fill="none" stroke="#A855F7" stroke-width="1.6"/><line x1="6" y1="16" x2="30" y2="16" stroke="#A855F7" stroke-width="1.3"/><line x1="6" y1="20" x2="30" y2="20" stroke="#A855F7" stroke-width="1.3"/><line x1="12" y1="11" x2="12" y2="25" stroke="#A855F7" stroke-width="1.3"/><line x1="24" y1="11" x2="24" y2="25" stroke="#A855F7" stroke-width="1.3"/><circle cx="12" cy="11" r="1.5" fill="#A855F7"/><circle cx="24" cy="11" r="1.5" fill="#A855F7"/><circle cx="12" cy="25" r="1.5" fill="#A855F7"/><circle cx="24" cy="25" r="1.5" fill="#A855F7"/></svg></span><span class="an">Movie Light</span></div>
+
+  </div>
+
+</div><!-- /home -->
+
+<!-- ════════════════ SECURITY PAGE ════════════════ -->
+<div class="page" id="page-security">
+  <div class="sh"><h2>Live Cameras</h2></div>
+  <div class="cam-grid">
+    <div class="cam"><div class="cam-ph">📷</div><div class="cam-lbl">G4 Doorbell — Front</div><div class="cam-live"><span class="dlive"></span>LIVE</div></div>
+    <div class="cam"><div class="cam-ph">📷</div><div class="cam-lbl">G6 — Entry Camera</div><div class="cam-live"><span class="dlive"></span>LIVE</div></div>
+  </div>
+  <div class="sh"><h2>Alarm System</h2></div>
+  <div class="alm-box">
+    <div><div style="font-size:12px;color:var(--muted)">ALARMO</div><div class="alm-s">✓ Disarmed</div></div>
+    <div class="alm-btns"><button class="alm-btn alm-away">🚨 Arm Away</button><button class="alm-btn alm-home">🏠 Arm Home</button></div>
+  </div>
+  <div class="sh"><h2>Sensors</h2></div>
+  <div class="sensor-row">
+    <div class="sensor"><span class="dot dok"></span>🚪 Main Door: Closed</div>
+    <div class="sensor"><span class="dot dok"></span>🏃 Entrance Motion: Clear</div>
+    <div class="sensor"><span class="dot dok"></span>🍳 Kitchen Motion: Clear</div>
+    <div class="sensor"><span class="dot dok"></span>📦 Storage Motion: Clear</div>
+    <div class="sensor"><span class="dot dok"></span>🔒 Smart Lock: Locked · 93%</div>
+    <div class="sensor"><span class="dot dok"></span>👆 Fingerprint Sensor: Ready</div>
+    <div class="sensor"><span class="dot dok"></span>🔔 G4 Doorbell: Online · Recording</div>
+    <div class="sensor"><span class="dot dok"></span>📹 Entry Camera: Idle</div>
+    <div class="sensor"><span class="dot dok"></span>💨 Smoke/CO: Clear</div>
+    <div class="sensor"><span class="dot dwarn"></span>💾 NAS Storage: 95.6%</div>
+  </div>
+</div>
+
+<!-- ════════════════ CLIMATE PAGE ════════════════ -->
+<div class="page" id="page-climate">
+  <div class="sh"><h2>Air Conditioning</h2></div>
+  <div class="cg">
+    <div class="ac ac-lr" onclick="pop('ac-lr')">
+      <div class="ach"><div class="acname">🛋️ Living Room</div><span class="badge badge-c">❄️ Cooling</span></div>
+      <div class="actemp" style="color:#38bdf8">23°</div><div class="acsub">Set 23°C · Fan Auto</div>
+      <div class="acctr"><button class="acbtn">−</button><button class="acbtn on-c">❄️</button><button class="acbtn">💨</button><button class="acbtn">+</button></div>
+    </div>
+    <div class="ac ac-bd" onclick="pop('ac-bd')">
+      <div class="ach"><div class="acname">🛏️ Bedroom</div><span class="badge badge-p">❄️ Cooling</span></div>
+      <div class="actemp" style="color:#a78bfa">22°</div><div class="acsub">Set 22°C · Quiet</div>
+      <div class="acctr"><button class="acbtn">−</button><button class="acbtn on-p">❄️</button><button class="acbtn">💨</button><button class="acbtn">+</button></div>
+    </div>
+    <div class="ac ac-of">
+      <div class="ach"><div class="acname">💼 Office</div><span class="badge badge-off">Off</span></div>
+      <div class="actemp" style="color:var(--muted)">--°</div><div class="acsub">Standby</div>
+      <div class="acctr"><button class="acbtn">−</button><button class="acbtn">❄️</button><button class="acbtn">💨</button><button class="acbtn">+</button></div>
+    </div>
+    <div class="ac ac-ln">
+      <div class="ach"><div class="acname">👶 Baby Room</div><span class="badge badge-off">Off</span></div>
+      <div class="actemp" style="color:var(--muted)">--°</div><div class="acsub">Standby · climate.1e51bb2c</div>
+      <div class="acctr"><button class="acbtn">−</button><button class="acbtn">❄️</button><button class="acbtn">💨</button><button class="acbtn">+</button></div>
+    </div>
+  </div>
+  <div class="sh"><h2>Guest Room AC (IR Scripts)</h2></div>
+  <div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.25);border-radius:var(--rl);padding:20px;">
+    <div style="font-size:13px;color:var(--muted2);margin-bottom:14px;">Controlled via IR blaster — 9 smart scripts</div>
+    <div class="script-grid cols2" style="margin-bottom:10px;">
+      <button class="sbtn sbtn-g" style="font-size:14px;">▶️ Turn ON</button>
+      <button class="sbtn sbtn-r" style="font-size:14px;">⏹ Turn OFF</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Set Temperature</div>
+    <div class="script-grid cols3">
+      <button class="sbtn sbtn-c">19°C</button>
+      <button class="sbtn sbtn-c">20°C</button>
+      <button class="sbtn sbtn-c">21°C</button>
+      <button class="sbtn sbtn-c">22°C</button>
+      <button class="sbtn sbtn-c">23°C</button>
+      <div style="display:flex;gap:6px;grid-column:auto;">
+        <button class="sbtn sbtn-a" style="flex:1">▲ Up</button>
+        <button class="sbtn sbtn-a" style="flex:1">▼ Down</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ TV PAGE ════════════════ -->
+<div class="page" id="page-tv">
+  <div class="sh"><h2>TV & Media Control</h2></div>
+  <div class="tv-grid">
+    <div class="rbox">
+      <div class="rtitle">LG TV Remote Control</div>
+      <div class="dpad">
+        <button class="rk sp"></button><button class="rk">▲</button><button class="rk sp"></button>
+        <button class="rk">◀</button><button class="rk ok">OK</button><button class="rk">▶</button>
+        <button class="rk sp"></button><button class="rk">▼</button><button class="rk sp"></button>
+      </div>
+      <div class="rrow" style="margin-top:18px;">
+        <button class="rk2">⏮</button><button class="rk2" style="background:#5b8dee;color:white;">⏸ Pause</button><button class="rk2">⏭</button>
+      </div>
+      <div class="rrow">
+        <button class="rk2">🏠 Home</button><button class="rk2">↩ Back</button><button class="rk2">⚙️ Menu</button><button class="rk2">🔇 Mute</button>
+      </div>
+    </div>
+    <div class="tright">
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;">Streaming Apps</div>
+        <div class="tagrid">
+          <div class="ta nf"><span class="ta-ico"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#E50914"/><path fill-rule="evenodd" d="M7 7h5.5L23.5 29H29V7h-5.5L12.5 29H7Z" fill="white"/></svg></span>Netflix</div>
+          <div class="ta yt"><span class="ta-ico"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#FF0000"/><rect x="5" y="9" width="26" height="18" rx="5" fill="white"/><polygon points="14,13 14,23 25,18" fill="#FF0000"/></svg></span>YouTube</div>
+          <div class="ta sh"><span class="ta-ico"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="shg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0E1C7A"/><stop offset="100%" stop-color="#1AACCE"/></linearGradient></defs><rect width="36" height="36" rx="7" fill="url(#shg2)"/><polygon points="13,10 13,26 27,18" fill="white"/></svg></span>Shahid</div>
+          <div class="ta px"><span class="ta-ico"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#1F1F1F"/><path d="M9 8h6L26 18 15 28H9l10-10Z" fill="#E5A00D"/></svg></span>Plex</div>
+          <div class="ta st"><span class="ta-ico"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="stg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6E0FBF"/><stop offset="100%" stop-color="#3B0870"/></linearGradient></defs><rect width="36" height="36" rx="7" fill="url(#stg2)"/><text x="18" y="16.5" text-anchor="middle" fill="white" font-size="10" font-family="Arial,sans-serif" font-weight="900">STC</text><text x="18" y="27.5" text-anchor="middle" fill="white" font-size="10" font-family="Arial,sans-serif" font-weight="900">tv</text></svg></span>STC TV</div>
+          <div class="ta mk"><span class="ta-ico"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#052e16"/><rect x="8" y="21" width="20" height="10" rx="2.5" fill="none" stroke="#4ade80" stroke-width="1.6"/><circle cx="14" cy="26" r="2.5" fill="none" stroke="#4ade80" stroke-width="1.6"/><line x1="20" y1="24" x2="27" y2="24" stroke="#4ade80" stroke-width="1.3" stroke-linecap="round"/><line x1="20" y1="27" x2="27" y2="27" stroke="#4ade80" stroke-width="1.3" stroke-linecap="round"/><path d="M11 17c2-3 12-3 14 0" fill="none" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"/><path d="M7 13c4-6 18-6 22 0" fill="none" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"/></svg></span>Radio</div>
+        </div>
+      </div>
+      <div class="hp-box" id="radio-tvbox">
+        <div class="mlbl">HomePod Mini · 📻 Radio</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+          <div class="mtit" id="radio-tv-title">Radio — Off</div>
+          <button class="tog off" id="radio-tog2" onclick="toggleRadio()"></button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="radio-tv-sub">input_boolean.radio_automation · Tap to toggle</div>
+        <div class="mctr" style="margin-top:12px;">
+          <button class="mcc" style="flex:1;width:auto;border-radius:10px;font-size:12px;">⏯ Resume</button>
+          <button class="mcc">🔇</button>
+        </div>
+      </div>
+      <div class="mc mc-atv">
+        <div class="mlbl">Apple TV</div><div class="mtit" style="margin-top:5px;">Paused</div>
+        <div class="mctr" style="margin-top:12px;">
+          <button class="mcc">⏮</button><button class="mcc play">⏯</button><button class="mcc">⏭</button>
+          <div class="vol"><div class="volf" style="width:40%"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<!-- ══ BOTTOM NAV ══ -->
+<div id="nav">
+  <div class="navp">
+    <div class="ni active" id="ni-home" onclick="go('home')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>Home
+    </div>
+    <div class="ni" id="ni-security" onclick="go('security')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Security
+    </div>
+    <div class="ni" id="ni-climate" onclick="go('climate')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z"/></svg>Climate
+    </div>
+    <div class="ni" id="ni-tv" onclick="go('tv')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17,2 12,7 7,2"/></svg>TV & Media
+    </div>
+  </div>
+</div>
+
+<!-- ══ OVERLAY + POPUP ══ -->
+<div id="overlay" onclick="closeP()"></div>
+<div id="popup">
+  <div class="ph"></div>
+  <div class="phd">
+    <div class="pti">
+      <div class="pico" id="pico">🛋️</div>
+      <div><h2 id="pname">Room</h2><p id="psub">Loading…</p></div>
+    </div>
+    <button class="px-btn" onclick="closeP()">✕</button>
+  </div>
+  <div id="pcontent"></div>
+</div>
+
+<script type="module" src="./ha-controller.js"></script>
+
+<script>
+// ── Clock ──
+function tick(){
+  const d=new Date(),h=String(d.getHours()).padStart(2,'0'),m=String(d.getMinutes()).padStart(2,'0');
+  document.getElementById('clk').textContent=h+':'+m;
+}
+tick();setInterval(tick,10000);
+
+// ── Prayer Times (from HA sensors — UTC ISO strings) ──
+// These are today's values; tomorrow's Fajr is approximated +1 day
+const PRAYER_DATA = [
+  { name:'Fajr',    icon:'🌙', utc:'2026-05-16T00:23:00+00:00' },
+  { name:'Dhuhr',   icon:'☀️', utc:'2026-05-16T08:36:00+00:00' },
+  { name:'Asr',     icon:'🌤️', utc:'2026-05-16T12:05:00+00:00' },
+  { name:'Maghrib', icon:'🌇', utc:'2026-05-16T15:20:00+00:00' },
+  { name:'Isha',    icon:'🌃', utc:'2026-05-16T16:50:00+00:00' },
+];
+
+function updatePrayer(){
+  const now = new Date();
+  let next = null;
+
+  // Find the first prayer still in the future
+  for(const p of PRAYER_DATA){
+    const t = new Date(p.utc);
+    if(t > now){ next = {...p, date:t}; break; }
+  }
+
+  // If all prayers passed → tomorrow's Fajr (approx same time +1 day)
+  if(!next){
+    const t = new Date(PRAYER_DATA[0].utc);
+    t.setDate(t.getDate()+1);
+    next = {...PRAYER_DATA[0], date:t};
+  }
+
+  // Time remaining
+  const diffMs  = next.date - now;
+  const totalMin= Math.floor(diffMs / 60000);
+  const hrs     = Math.floor(totalMin / 60);
+  const mins    = totalMin % 60;
+  const left    = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+
+  // Local display time
+  const localStr = next.date.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+
+  const chip = document.getElementById('prayer-chip');
+  if(chip) chip.innerHTML = `🕌 ${next.icon} <strong>${next.name}</strong> · ${localStr} &nbsp;<span style="opacity:.75;font-size:11px;">in ${left}</span>`;
+}
+
+updatePrayer();
+setInterval(updatePrayer, 30000); // refresh every 30 s
+
+// ── Nav ──
+function go(p){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(x=>x.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  const n=document.getElementById('ni-'+p);if(n)n.classList.add('active');
+}
+function E(ev){ev.stopPropagation();}
+
+// ── Popup rooms data ──
+const ROOMS={
+  lr:{
+    ico:'🛋️',bg:'rgba(91,141,238,.22)',name:'Living Room',sub:'3 lights on · AC cooling 23°C · TV playing',
+    html:`
+    <div class="psec">💡 Lighting</div>
+    <div class="pc">
+      <div class="ctrl accent-b full">
+        <div class="clbl">Main Group — All Lights</div>
+        <div class="crow"><div><div class="cval">On</div><div class="csub">3 switches active</div></div><button class="tog on"></button></div>
+        <div class="scenes" style="margin-top:14px;"><button class="scene on">Normal</button><button class="scene off">Movie 🎬</button><button class="scene off">Dim 🌙</button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Switch 1 — Left</div>
+        <div class="light-sw"><div><div class="lsw-name">Left Light</div></div><button class="tog on"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center Light</div></div><button class="tog on"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right Light</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Switch 2</div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog on"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog on"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off"></button></div>
+      </div>
+    </div>
+    <div class="psec">🌈 LED Strips</div>
+    <div class="pc">
+      <div class="ctrl accent-b">
+        <div class="clbl">TV LED Strip</div>
+        <div class="crow"><div><div class="cval">On · Amber</div><div class="csub">Brightness 80%</div></div><button class="tog on"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">WLED Strip</div>
+        <div class="crow"><div><div class="cval">On</div><div class="csub">Rainbow effect</div></div><button class="tog on"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Yeelight Bulb</div>
+        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+      </div>
+    </div>
+    <div class="psec">❄️ Air Conditioning</div>
+    <div class="pc">
+      <div class="ctrl accent-b full">
+        <div class="clbl">Living Room AC — Gree Unit</div>
+        <div class="tempd"><span class="tbig" style="color:#38bdf8">23</span><span class="tunit">°C</span></div>
+        <div class="csub">Cooling · Fan Auto · Feels 21°C · Panel Light On</div>
+        <input class="tslider" type="range" min="16" max="30" value="23"
+          style="--c:#38bdf8" oninput="slup(this)">
+        <div class="scenes">
+          <button class="scene on">❄️ Cool</button>
+          <button class="scene off">💨 Fan</button>
+          <button class="scene off">🌡️ Heat</button>
+          <button class="scene off">Off</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+          <button class="sbtn sbtn-b" style="flex:1;font-size:11px;">🔇 Quiet</button>
+          <button class="sbtn sbtn-c" style="flex:1;font-size:11px;">🌬️ Fresh Air</button>
+          <button class="sbtn sbtn-a" style="flex:1;font-size:11px;">Fan: Auto</button>
+        </div>
+      </div>
+    </div>
+    <div class="psec">📺 Media</div>
+    <div class="pc">
+      <div class="ctrl accent-b">
+        <div class="clbl">LG TV</div>
+        <div class="crow"><div><div class="cval">Netflix</div><div class="csub">Playing · Vol 55%</div></div>
+          <div style="display:flex;gap:7px;"><button class="mcc">⏮</button><button class="mcc play" style="width:34px;height:34px;font-size:14px;">⏸</button><button class="mcc">⏭</button></div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Apple TV</div>
+        <div class="crow"><div><div class="cval">Paused</div></div><button class="mcc play" style="width:34px;height:34px;font-size:14px;">⏯</button></div>
+      </div>
+    </div>
+    <div class="psec">🎬 Quick Scenes</div>
+    <div class="pc">
+      <div class="ctrl full">
+        <div class="script-grid cols3">
+          <button class="sbtn sbtn-p">🎬 Movie Time</button>
+          <button class="sbtn sbtn-b">📺 Apple TV Scene</button>
+          <button class="sbtn sbtn-a">💡 Lights Off Scene</button>
+        </div>
+      </div>
+    </div>`
+  },
+
+  bd:{
+    ico:'🛏️',bg:'rgba(167,139,250,.22)',name:'Master Bedroom',sub:'5 lights on · AC cooling 22°C',
+    html:`
+    <div class="psec">💡 Bedroom Lights</div>
+    <div class="pc">
+      <div class="ctrl accent-p full">
+        <div class="clbl">Master Room Group</div>
+        <div class="crow"><div><div class="cval">On</div><div class="csub">Group switch</div></div><button class="tog on tog-p"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Master Lights 1</div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog on tog-p"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-p"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Master Lights 2</div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog on tog-p"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-p"></button></div>
+      </div>
+    </div>
+    <div class="psec">🚿 Master Bathroom</div>
+    <div class="pc">
+      <div class="ctrl accent-p">
+        <div class="clbl">Bathroom Lights</div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off tog-p"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog on tog-p"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Bath Fan / Automation</div>
+        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+      </div>
+    </div>
+    <div class="psec">❄️ Bedroom AC</div>
+    <div class="pc">
+      <div class="ctrl accent-p full">
+        <div class="clbl">Bedroom AC — Gree (climate.1e050116)</div>
+        <div class="tempd"><span class="tbig" style="color:#a78bfa">22</span><span class="tunit">°C</span></div>
+        <div class="csub">Cooling · Quiet Mode · Humidity 38% · Feels 21°C</div>
+        <input class="tslider" type="range" min="16" max="30" value="22" oninput="slup(this)" style="--c:#a78bfa">
+        <div class="scenes">
+          <button class="scene on">❄️ Cool</button>
+          <button class="scene off">💨 Fan</button>
+          <button class="scene off">🌡️ Heat</button>
+          <button class="scene off">Off</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="sbtn sbtn-p" style="flex:1;font-size:11px;">🔇 Quiet ON</button>
+          <button class="sbtn" style="flex:1;font-size:11px;background:rgba(255,255,255,.07);color:var(--muted);">Quiet OFF</button>
+          <button class="sbtn sbtn-a" style="flex:1;font-size:11px;">🌅 Auto Off 6am</button>
+        </div>
+      </div>
+    </div>`
+  },
+
+  kt:{
+    ico:'🍳',bg:'rgba(251,191,36,.18)',name:'Kitchen',sub:'All lights off · No motion',
+    html:`
+    <div class="psec">💡 Kitchen Lights</div>
+    <div class="pc">
+      <div class="ctrl accent-a full">
+        <div class="clbl">Kitchen Group Switch</div>
+        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.kitchen_group_switch</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">KitchenLights Left</div>
+        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">KitchenLights Right</div>
+        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+      </div>
+    </div>
+    <div class="psec">🏠 Kitchen Appliances</div>
+    <div class="pc">
+      <div class="ctrl accent-a">
+        <div class="clbl">Dishwasher</div>
+        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.150633095099407_power</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">💧 Water Filter</div>
+        <div class="crow"><div><div class="cval" style="color:#4ade80">On</div><div class="csub">Athom Smart Plug</div></div><button class="tog on" style="background:#10b981;"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">📞 Intercom</div>
+        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Motion Sensor</div>
+        <div class="crow"><div><div class="cval" style="color:#4ade80">Clear</div><div class="csub">No occupancy detected</div></div><span style="font-size:22px">✅</span></div>
+      </div>
+    </div>`
+  },
+
+  of:{
+    ico:'💼',bg:'rgba(6,182,212,.22)',name:'Office',sub:'2 lights on · AC standby',
+    html:`
+    <div class="psec">💡 Office Lights</div>
+    <div class="pc">
+      <div class="ctrl accent-c full">
+        <div class="clbl">Office Group</div>
+        <div class="crow"><div><div class="cval">On</div><div class="csub">Both switches active</div></div><button class="tog on tog-c"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Office Light Switch</div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog on tog-c"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog on tog-c"></button></div>
+      </div>
+    </div>
+    <div class="psec">❄️ Office AC</div>
+    <div class="pc">
+      <div class="ctrl accent-c full">
+        <div class="clbl">Office AC — Gree Unit</div>
+        <div class="crow"><div><div class="cval">Off · Standby</div><div class="csub">Auto-on when temp &gt; 30°C</div></div><button class="tog off tog-c"></button></div>
+        <div class="scenes" style="margin-top:14px;">
+          <button class="scene off">❄️ Cool</button>
+          <button class="scene off">💨 Fan</button>
+          <button class="scene off">Off</button>
+        </div>
+      </div>
+    </div>`
+  },
+
+  br:{
+    ico:'👶',bg:'rgba(251,113,133,.22)',name:'Baby Room',sub:'Lights · AC standby',
+    html:`
+    <div class="psec">💡 Baby Room Lights</div>
+    <div class="pc">
+      <div class="ctrl accent-r full">
+        <div class="clbl">Baby Room Main Switch</div>
+        <div class="crow"><div><div class="cval">On · Nightlight</div><div class="csub">switch.baby_room</div></div><button class="tog on" style="background:#fb7185;"></button></div>
+        <div class="scenes" style="margin-top:12px;">
+          <button class="scene on">🌙 Nightlight</button>
+          <button class="scene off">💡 Full</button>
+          <button class="scene off">Off</button>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Baby Lights Left</div>
+        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.laundry_light_left</div></div><button class="tog off" style=""></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Baby Lights Right</div>
+        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.laundry_light_right</div></div><button class="tog off" style=""></button></div>
+      </div>
+    </div>
+    <div class="psec">❄️ Baby Room AC</div>
+    <div class="pc">
+      <div class="ctrl accent-r full">
+        <div class="clbl">Baby Room AC — Gree (climate.1e51bb2c)</div>
+        <div class="tempd"><span class="tbig" style="color:#fb7185">--</span><span class="tunit">°C</span></div>
+        <div class="csub">Standby · Tap to activate</div>
+        <input class="tslider" type="range" min="16" max="30" value="24"
+          style="--c:#fb7185" oninput="slup(this)">
+        <div class="scenes">
+          <button class="scene off">❄️ Cool</button>
+          <button class="scene off">💨 Fan</button>
+          <button class="scene off">🌡️ Heat</button>
+          <button class="scene off">⏹ Off</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+          <button class="sbtn sbtn-r" style="flex:1;font-size:11px;">🔇 Quiet</button>
+          <button class="sbtn sbtn-b" style="flex:1;font-size:11px;">🌬️ Fresh Air</button>
+          <button class="sbtn sbtn-a" style="flex:1;font-size:11px;">💤 Sleep Mode</button>
+        </div>
+      </div>
+    </div>`
+  },
+
+  gr:{
+    ico:'🚪',bg:'rgba(16,185,129,.22)',name:'Guest Room',sub:'3 lights · IR AC via 9 scripts',
+    html:`
+    <div class="psec">💡 Guest Room Lights</div>
+    <div class="pc">
+      <div class="ctrl accent-g full">
+        <div class="clbl">Guest Room Group Switch</div>
+        <div class="crow"><div><div class="cval">Off</div><div class="csub">All 3 switches</div></div><button class="tog off tog-g"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Guest Light — Individual</div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-g"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off tog-g"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-g"></button></div>
+      </div>
+    </div>
+    <div class="psec">❄️ Guest Room AC — IR Script Control</div>
+    <div class="pc">
+      <div class="ctrl accent-g full">
+        <div class="clbl" style="margin-bottom:14px;">Power</div>
+        <div class="script-grid cols2">
+          <button class="sbtn sbtn-g" style="padding:14px;font-size:14px;">▶️ GuestAC On</button>
+          <button class="sbtn sbtn-r" style="padding:14px;font-size:14px;">⏹ GuestAC Off</button>
+        </div>
+      </div>
+      <div class="ctrl accent-g full">
+        <div class="clbl" style="margin-bottom:14px;">Set Temperature</div>
+        <div class="script-grid cols3" style="margin-bottom:10px;">
+          <button class="sbtn sbtn-c" style="font-size:13px;">19°C</button>
+          <button class="sbtn sbtn-c" style="font-size:13px;">20°C</button>
+          <button class="sbtn sbtn-c" style="font-size:13px;">21°C</button>
+          <button class="sbtn sbtn-c" style="font-size:13px;">22°C</button>
+          <button class="sbtn sbtn-c" style="font-size:13px;">23°C</button>
+          <div></div>
+        </div>
+        <div class="clbl" style="margin-top:10px;margin-bottom:10px;">Adjust</div>
+        <div class="script-grid cols2">
+          <button class="sbtn sbtn-a">▲ Temp Up</button>
+          <button class="sbtn sbtn-a">▼ Temp Down</button>
+        </div>
+      </div>
+    </div>`
+  },
+
+  hw:{
+    ico:'🏠',bg:'rgba(148,163,184,.18)',name:'Hallway',sub:'Entrance · Corridor · Between Rooms',
+    html:`
+    <div class="psec">💡 Hallway Lights</div>
+    <div class="pc">
+      <div class="ctrl full">
+        <div class="clbl">Hallway Group</div>
+        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Entrance Lights</div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Between Rooms</div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Corridor</div>
+        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+      </div>
+    </div>
+    <div class="psec">🗄️ Storage</div>
+    <div class="pc">
+      <div class="ctrl">
+        <div class="clbl">Storage Light</div>
+        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.storagelight</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Storage Motion</div>
+        <div class="crow"><div><div class="cval" style="color:#4ade80">Clear</div><div class="csub">binary_sensor.storagemotionsensor_occupancy</div></div><span style="font-size:20px">✅</span></div>
+      </div>
+    </div>
+    <div class="psec">🚦 Motion & Automations</div>
+    <div class="pc">
+      <div class="ctrl">
+        <div class="clbl">Entrance Motion Sensor</div>
+        <div class="crow"><div><div class="cval" style="color:#4ade80">Clear</div><div class="csub">binary_sensor.entrance_motion_sensor_occupancy</div></div><span style="font-size:20px">✅</span></div>
+      </div>
+      <div class="ctrl">
+        <div class="clbl">Corridor Auto Mode</div>
+        <div class="crow"><div><div class="cval">On</div><div class="csub">Motion-triggered</div></div><button class="tog on"></button></div>
+      </div>
+    </div>`
+  },
+
+  ln:{
+    ico:'🧺',bg:'rgba(248,113,113,.22)',name:'Laundry Room',sub:'Lights off · No AC',
+    html:`
+    <div class="psec">💡 Laundry Lights</div>
+    <div class="pc">
+      <div class="ctrl accent-r full">
+        <div class="clbl">Laundry Light Left · switch.laundry_light_left</div>
+        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+      </div>
+      <div class="ctrl accent-r full">
+        <div class="clbl">Laundry Light Right · switch.laundry_light_right</div>
+        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+      </div>
+    </div>
+    <div class="psec">💧 Appliances</div>
+    <div class="pc">
+      <div class="ctrl">
+        <div class="clbl">Washing Machine Power</div>
+        <div class="crow"><div><div class="cval">Off</div><div class="csub">Power monitoring</div></div><button class="tog off"></button></div>
+      </div>
+    </div>`
+  },
+
+  'ac-lr':{ico:'❄️',bg:'rgba(56,189,248,.22)',name:'Living Room AC',sub:'Cooling 23°C · Fan Auto',html:`
+    <div class="pc" style="margin-top:20px;">
+      <div class="ctrl accent-b full">
+        <div class="clbl">Temperature</div>
+        <div class="tempd"><span class="tbig" style="color:#38bdf8">23</span><span class="tunit">°C</span></div>
+        <div class="csub">Set 23°C · Current 25°C · Feels 21°C</div>
+        <input class="tslider" type="range" min="16" max="30" value="23" oninput="slup(this)">
+        <div class="scenes"><button class="scene on">❄️ Cool</button><button class="scene off">💨 Fan</button><button class="scene off">🌡️ Heat</button><button class="scene off">Off</button></div>
+      </div>
+    </div>`
+  },
+  'ac-bd':{ico:'❄️',bg:'rgba(167,139,250,.22)',name:'Bedroom AC',sub:'Cooling 22°C · Quiet',html:`
+    <div class="pc" style="margin-top:20px;">
+      <div class="ctrl accent-p full">
+        <div class="clbl">Temperature</div>
+        <div class="tempd"><span class="tbig" style="color:#a78bfa">22</span><span class="tunit">°C</span></div>
+        <input class="tslider" type="range" min="16" max="30" value="22" oninput="slup(this)">
+        <div class="scenes"><button class="scene on">❄️ Cool</button><button class="scene off">💨 Fan</button><button class="scene off">Off</button></div>
+      </div>
+    </div>`
+  },
+};
+
+function pop(id){
+  const r=ROOMS[id];if(!r)return;
+  document.getElementById('pico').textContent=r.ico;
+  document.getElementById('pico').style.background=r.bg||'rgba(91,141,238,.22)';
+  document.getElementById('pname').textContent=r.name;
+  document.getElementById('psub').textContent=r.sub;
+  document.getElementById('pcontent').innerHTML=r.html;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('popup').classList.add('open');
+  document.body.style.overflow='hidden';
+  initWidgets();
+}
+function closeP(){
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('popup').classList.remove('open');
+  document.body.style.overflow='';
+}
+
+// Slider color update
+function slup(s){
+  const pct=(s.value-16)/(30-16)*100;
+  const c=getComputedStyle(s).getPropertyValue('--c').trim()||'#38bdf8';
+  s.style.background=`linear-gradient(to right,${c} ${pct}%,rgba(255,255,255,.12) ${pct}%)`;
+  s.style.setProperty('--thumb',c);
+  const big=s.closest('.ctrl').querySelector('.tbig');
+  if(big)big.textContent=s.value;
+}
+
+function initWidgets(){
+  // Sliders
+  document.querySelectorAll('.tslider').forEach(s=>{
+    const c=s.style.getPropertyValue('--c')||getComputedStyle(s).getPropertyValue('--c').trim()||'#38bdf8';
+    s.style.setProperty('--c',c);
+    slup(s);
+    s.addEventListener('input',()=>slup(s));
+  });
+  // Slider thumb color via CSS custom property (dynamic)
+  const style=document.createElement('style');
+  style.textContent=`.tslider::-webkit-slider-thumb{background:var(--c,#38bdf8)!important;}`;
+  document.head.appendChild(style);
+  // Scenes
+  document.querySelectorAll('.scenes').forEach(row=>{
+    row.querySelectorAll('.scene').forEach(b=>{
+      b.onclick=function(){
+        row.querySelectorAll('.scene').forEach(x=>{x.classList.remove('on');x.classList.add('off');});
+        this.classList.add('on');this.classList.remove('off');
+      };
+    });
+  });
+  // Toggles
+  document.querySelectorAll('.tog').forEach(t=>{
+    t.onclick=function(){
+      this.classList.toggle('on');this.classList.toggle('off');
+    };
+  });
+  // Script buttons pulse
+  document.querySelectorAll('.sbtn').forEach(b=>{
+    b.onclick=function(){
+      this.style.transform='scale(.93)';
+      setTimeout(()=>this.style.transform='',150);
+    };
+  });
+}
+
+// Touch swipe to close
+let sy=0;
+document.getElementById('popup').addEventListener('touchstart',e=>{sy=e.touches[0].clientY;});
+document.getElementById('popup').addEventListener('touchmove',e=>{if(e.touches[0].clientY-sy>70)closeP();});
+
+// ── Radio toggle (input_boolean.radio_automation) ──
+let radioOn = false; // reflects HA state: currently off
+function toggleRadio(){
+  radioOn = !radioOn;
+  // Main media card
+  const tog1 = document.getElementById('radio-tog');
+  const title = document.getElementById('radio-title');
+  const sub   = document.getElementById('radio-sub');
+  const card  = document.getElementById('radio-card');
+  // TV page
+  const tog2  = document.getElementById('radio-tog2');
+  const tvtit = document.getElementById('radio-tv-title');
+  const tvsub = document.getElementById('radio-tv-sub');
+  const tvbox = document.getElementById('radio-tvbox');
+  // App strip
+  const appico = document.getElementById('radio-app-ico');
+  const applbl = document.getElementById('radio-app-lbl');
+  const appdot = document.getElementById('radio-app-dot');
+  const appel  = document.getElementById('radio-app');
+
+  if(radioOn){
+    [tog1,tog2].forEach(t=>{if(t){t.classList.add('on');t.classList.remove('off');}});
+    if(title) title.textContent='📻 Radio — On · Playing';
+    if(sub)   sub.style.color='#4ade80';
+    if(card)  card.style.borderColor='rgba(16,185,129,.4)';
+    if(tvtit) tvtit.textContent='Radio — On · Playing';
+    if(tvsub) tvsub.style.color='#4ade80';
+    if(tvbox) tvbox.style.borderColor='rgba(16,185,129,.4)';
+    // radio SVG icon stays the same, dot and label show state
+    if(applbl)applbl.textContent='Radio On';
+    if(appdot){appdot.style.background='#4ade80';appdot.style.boxShadow='0 0 6px rgba(74,222,128,.6)';}
+    if(appel) appel.style.borderColor='rgba(16,185,129,.5)';
+  } else {
+    [tog1,tog2].forEach(t=>{if(t){t.classList.remove('on');t.classList.add('off');}});
+    if(title) title.textContent='📻 Radio — Off';
+    if(sub)   sub.style.color='';
+    if(card)  card.style.borderColor='';
+    if(tvtit) tvtit.textContent='Radio — Off';
+    if(tvsub) tvsub.style.color='';
+    if(tvbox) tvbox.style.borderColor='';
+    // radio SVG icon stays the same, dot and label show state
+    if(applbl)applbl.textContent='Radio Off';
+    if(appdot){appdot.style.background='#6b7280';appdot.style.boxShadow='none';}
+    if(appel) appel.style.borderColor='';
+  }
+}
+
+// ── Battery notification dismiss ──
+function dismissNotif(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.classList.add('hiding');
+  setTimeout(()=>{el.remove();updateBell();},280);
+}
+function dismissAll(){
+  const cards=document.querySelectorAll('.notif-card');
+  cards.forEach((c,i)=>{
+    setTimeout(()=>{
+      c.classList.add('hiding');
+      setTimeout(()=>{c.remove();updateBell();},280);
+    },i*80);
+  });
+}
+function updateBell(){
+  const count=document.querySelectorAll('.notif-card').length;
+  const badge=document.querySelector('.nbadge');
+  const bar=document.getElementById('notif-bar');
+  if(count===0){
+    if(bar)bar.style.display='none';
+    if(badge)badge.style.display='none';
+  }else{
+    if(badge){badge.textContent=count;badge.style.display='flex';}
+  }
+}
+function scrollToNotifs(){
+  document.getElementById('notif-bar').scrollIntoView({behavior:'smooth',block:'start'});
+}
+</script>
+</body>
+</html>

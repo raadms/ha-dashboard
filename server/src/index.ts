@@ -9,6 +9,7 @@ import { isConfigured, loadConfig, saveConfig, getConfig } from './config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
+const PUBLIC_DIR = join(__dirname, '../../public');
 
 loadConfig();
 
@@ -24,7 +25,7 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Rate limiter for auth endpoints
+// Rate limiter
 const attempts = new Map<string, { count: number; resetAt: number }>();
 function rateLimit(ip: string, max = 10): boolean {
   const now = Date.now();
@@ -35,15 +36,35 @@ function rateLimit(ip: string, max = 10): boolean {
   return true;
 }
 
-// Setup status — always public
+// ── API routes ──────────────────────────────────────────────────────────────
+
 app.get('/api/setup-status', (_req, res) => {
   res.json({ configured: isConfigured() });
 });
 
-// Setup wizard — only works once (until config exists)
+app.get('/api/config', (_req, res) => {
+  const config = getConfig();
+  res.json({ name: config?.dashboardName ?? 'Safrani Home', configured: isConfigured() });
+});
+
+app.post('/api/test-ha', async (req, res) => {
+  const { haUrl, haToken } = req.body as { haUrl?: string; haToken?: string };
+  if (!haUrl || !haToken) return res.status(400).json({ error: 'Missing fields' });
+  try {
+    const { default: fetch } = await import('node-fetch');
+    const r = await fetch(`${haUrl.replace(/\/$/, '')}/api/`, {
+      headers: { Authorization: `Bearer ${haToken}` },
+    });
+    if (r.ok) return res.json({ ok: true });
+    return res.status(400).json({ error: `HA returned ${r.status} — check URL and token` });
+  } catch {
+    return res.status(400).json({ error: 'Could not connect to Home Assistant' });
+  }
+});
+
 app.post('/api/setup', async (req, res) => {
   if (isConfigured()) {
-    return res.status(403).json({ error: 'Already configured. Use /api/reset to reconfigure.' });
+    return res.status(403).json({ error: 'Already configured' });
   }
   const { haUrl, haToken, password, dashboardName } = req.body as {
     haUrl?: string; haToken?: string; password?: string; dashboardName?: string;
@@ -54,7 +75,6 @@ app.post('/api/setup', async (req, res) => {
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
-  // Validate HA connectivity
   try {
     const { default: fetch } = await import('node-fetch');
     const test = await fetch(`${haUrl.replace(/\/$/, '')}/api/`, {
@@ -64,29 +84,11 @@ app.post('/api/setup', async (req, res) => {
   } catch {
     return res.status(400).json({ error: 'Could not connect to Home Assistant at that URL' });
   }
-
   const passwordHash = await hashPassword(password);
-  saveConfig({ haUrl: haUrl.replace(/\/$/, ''), haToken, passwordHash, dashboardName: dashboardName ?? 'Home Dashboard' });
+  saveConfig({ haUrl: haUrl.replace(/\/$/, ''), haToken, passwordHash, dashboardName: dashboardName ?? 'Safrani Home' });
   res.json({ ok: true });
 });
 
-// Test HA connection (during setup, before saving)
-app.post('/api/test-ha', async (req, res) => {
-  const { haUrl, haToken } = req.body as { haUrl?: string; haToken?: string };
-  if (!haUrl || !haToken) return res.status(400).json({ error: 'Missing fields' });
-  try {
-    const { default: fetch } = await import('node-fetch');
-    const r = await fetch(`${haUrl.replace(/\/$/, '')}/api/`, {
-      headers: { Authorization: `Bearer ${haToken}` },
-    });
-    if (r.ok) return res.json({ ok: true });
-    return res.status(400).json({ error: `HA returned ${r.status}` });
-  } catch (e) {
-    return res.status(400).json({ error: 'Connection failed' });
-  }
-});
-
-// Login
 app.post('/api/login', async (req, res) => {
   const ip = req.ip ?? 'unknown';
   if (!rateLimit(ip)) return res.status(429).json({ error: 'Too many attempts, wait a minute' });
@@ -102,13 +104,10 @@ app.get('/api/camera/:entityId', async (req, res) => {
   const token = req.query.token as string | undefined;
   const { verifyToken } = await import('./auth.js');
   if (!token || !verifyToken(token)) return res.status(401).send('Unauthorized');
-
   const entityId = req.params.entityId;
   if (!/^camera\.[a-z0-9_]+$/.test(entityId)) return res.status(400).send('Invalid entity');
-
   const config = getConfig();
   if (!config) return res.status(503).send('Not configured');
-
   try {
     const { default: fetch } = await import('node-fetch');
     const upstream = await fetch(`${config.haUrl}/api/camera_proxy/${entityId}`, {
@@ -122,16 +121,17 @@ app.get('/api/camera/:entityId', async (req, res) => {
   }
 });
 
-// Public config
-app.get('/api/config', (_req, res) => {
-  const config = getConfig();
-  res.json({ name: config?.dashboardName ?? 'Home Dashboard', configured: isConfigured() });
-});
+// ── Static files + page routing ─────────────────────────────────────────────
 
-// Serve React app
-const clientDist = join(__dirname, '../../client/dist');
-app.use(express.static(clientDist, { maxAge: '1h' }));
-app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
+app.use(express.static(PUBLIC_DIR));
+
+// /login — always serve login.html (client JS decides setup vs login)
+app.get('/login', (_req, res) => res.sendFile(join(PUBLIC_DIR, 'login.html')));
+
+// Everything else → dashboard (ha-bridge.js redirects to /login if no token)
+app.get('*', (_req, res) => res.sendFile(join(PUBLIC_DIR, 'index.html')));
+
+// ── WebSocket proxy ──────────────────────────────────────────────────────────
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/api/ws' });
@@ -139,5 +139,5 @@ setupWsProxy(wss);
 
 server.listen(PORT, () => {
   console.log(`[ha-dashboard] Running on http://0.0.0.0:${PORT}`);
-  if (!isConfigured()) console.log('[ha-dashboard] First run — open the app and complete setup');
+  if (!isConfigured()) console.log('[ha-dashboard] First run — open the app to complete setup');
 });

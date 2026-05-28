@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>Safrani Home</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07090f;
+  --g:rgba(255,255,255,.055);
+  --gb:rgba(255,255,255,.10);
+  --text:#f1f5f9;
+  --muted:#64748b;
+  --muted2:#94a3b8;
+  --blue:#5b8dee;
+  --r:20px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,'SF Pro Display','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 85% 55% at 5% -10%,rgba(91,141,238,.55) 0%,transparent 48%),
+    radial-gradient(ellipse 70% 55% at 97% 105%,rgba(167,139,250,.50) 0%,transparent 50%),
+    radial-gradient(ellipse 50% 45% at 52% 58%,rgba(16,185,129,.18) 0%,transparent 48%);
+}
+
+.wrap{position:relative;z-index:1;height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+
+.card{
+  width:100%;max-width:420px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:28px;
+  padding:36px 32px;
+  backdrop-filter:blur(24px);
+  -webkit-backdrop-filter:blur(24px);
+  box-shadow:0 32px 64px rgba(0,0,0,.5);
+}
+
+.logo{
+  width:56px;height:56px;border-radius:16px;
+  background:linear-gradient(135deg,rgba(91,141,238,.35),rgba(91,141,238,.15));
+  border:1px solid rgba(91,141,238,.3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:26px;margin:0 auto 20px;
+}
+h1{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
+.sub{text-align:center;font-size:13px;color:var(--muted2);margin-bottom:28px}
+
+.step{display:none}
+.step.active{display:block}
+
+label{display:block;font-size:11px;font-weight:600;letter-spacing:.8px;color:var(--muted2);text-transform:uppercase;margin-bottom:8px}
+input,textarea{
+  width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;padding:14px 16px;color:var(--text);font-size:14px;
+  font-family:inherit;outline:none;transition:border-color .2s;resize:none;
+}
+input:focus,textarea:focus{border-color:rgba(91,141,238,.6)}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+textarea{font-size:12px;font-family:'SF Mono',Monaco,monospace;line-height:1.5}
+
+.field{margin-bottom:16px}
+
+.btn{
+  width:100%;padding:15px;border-radius:16px;border:none;cursor:pointer;
+  font-size:15px;font-weight:700;font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:all .2s;margin-top:4px;
+}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{filter:brightness(1.1)}
+.btn-primary:disabled{opacity:.4;cursor:default}
+.btn-secondary{background:rgba(255,255,255,.08);color:var(--text);border:1px solid rgba(255,255,255,.12)}
+.btn-secondary:hover{background:rgba(255,255,255,.12)}
+
+.btn-row{display:flex;gap:10px;margin-top:6px}
+.btn-row .btn-secondary{flex:0 0 auto;padding:15px 20px}
+.btn-row .btn-primary{flex:1}
+
+.err{
+  background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);
+  border-radius:12px;padding:12px 14px;font-size:13px;color:#fca5a5;
+  margin-top:12px;display:none;
+}
+.err.show{display:block}
+.ok{
+  background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);
+  border-radius:12px;padding:12px 14px;font-size:13px;color:#6ee7b7;
+  margin-top:12px;display:none;align-items:center;gap:8px;
+}
+.ok.show{display:flex}
+
+.step-label{font-size:11px;font-weight:600;letter-spacing:.8px;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
+
+.spinner{
+  width:18px;height:18px;border:2px solid rgba(255,255,255,.3);
+  border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none
+}
+.spinner.show{display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="logo">🏠</div>
+    <h1 id="title">Safrani Home</h1>
+    <p class="sub" id="subtitle">Loading…</p>
+
+    <!-- LOGIN -->
+    <div class="step" id="step-login">
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="pwd" placeholder="Enter your dashboard password" onkeydown="if(event.key==='Enter')doLogin()"/>
+      </div>
+      <div class="err" id="login-err"></div>
+      <button class="btn btn-primary" id="login-btn" onclick="doLogin()">
+        <span class="spinner" id="login-spin"></span>
+        <span id="login-txt">Sign In</span>
+      </button>
+    </div>
+
+    <!-- SETUP STEP 1: HA -->
+    <div class="step" id="step-ha">
+      <div class="step-label">Step 1 of 2 · Home Assistant</div>
+      <div class="field">
+        <label>HA URL</label>
+        <input type="url" id="ha-url" placeholder="https://ha.yourdomain.com" oninput="resetTest()"/>
+      </div>
+      <div class="field">
+        <label>Long-Lived Access Token</label>
+        <textarea id="ha-token" rows="3" placeholder="Paste from HA → Profile → Security → Long-Lived Access Tokens" oninput="resetTest()"></textarea>
+      </div>
+      <div class="err" id="ha-err"></div>
+      <div class="ok" id="ha-ok">✅ Connected to Home Assistant</div>
+      <div class="btn-row" style="margin-top:16px">
+        <button class="btn btn-secondary" onclick="doTestHA()">
+          <span class="spinner" id="test-spin"></span>
+          <span id="test-txt">Test</span>
+        </button>
+        <button class="btn btn-primary" id="ha-next" onclick="gotoStep('step-pwd')" disabled>
+          Next →
+        </button>
+      </div>
+    </div>
+
+    <!-- SETUP STEP 2: PASSWORD -->
+    <div class="step" id="step-pwd">
+      <div class="step-label">Step 2 of 2 · Dashboard Password</div>
+      <div class="field">
+        <label>Dashboard Name</label>
+        <input type="text" id="dash-name" value="Safrani Home"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="s-pwd" placeholder="Minimum 8 characters"/>
+      </div>
+      <div class="field">
+        <label>Confirm Password</label>
+        <input type="password" id="s-pwd2" placeholder="Repeat password" onkeydown="if(event.key==='Enter')doSetup()"/>
+      </div>
+      <div class="err" id="setup-err"></div>
+      <div class="btn-row" style="margin-top:16px">
+        <button class="btn btn-secondary" onclick="gotoStep('step-ha')">← Back</button>
+        <button class="btn btn-primary" onclick="doSetup()">
+          <span class="spinner" id="setup-spin"></span>
+          <span id="setup-txt">Save & Finish</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function gotoStep(id) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.classList.add('show');
+}
+function hideErr(id) { document.getElementById(id)?.classList.remove('show'); }
+
+function resetTest() {
+  hideErr('ha-err');
+  document.getElementById('ha-ok').classList.remove('show');
+  document.getElementById('ha-next').disabled = true;
+}
+
+async function doTestHA() {
+  hideErr('ha-err');
+  document.getElementById('ha-ok').classList.remove('show');
+  const url = document.getElementById('ha-url').value.trim();
+  const token = document.getElementById('ha-token').value.trim();
+  if (!url || !token) { showErr('ha-err', 'Please fill in both fields'); return; }
+
+  const spin = document.getElementById('test-spin');
+  const txt  = document.getElementById('test-txt');
+  spin.classList.add('show'); txt.textContent = 'Testing…';
+
+  try {
+    const res  = await fetch('/api/test-ha', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({haUrl:url, haToken:token}) });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('ha-ok').classList.add('show');
+      document.getElementById('ha-next').disabled = false;
+    } else {
+      showErr('ha-err', data.error || 'Connection failed');
+    }
+  } catch { showErr('ha-err', 'Could not reach server'); }
+  finally { spin.classList.remove('show'); txt.textContent = 'Test'; }
+}
+
+async function doSetup() {
+  hideErr('setup-err');
+  const pwd  = document.getElementById('s-pwd').value;
+  const pwd2 = document.getElementById('s-pwd2').value;
+  if (pwd !== pwd2)     { showErr('setup-err', 'Passwords do not match'); return; }
+  if (pwd.length < 8)   { showErr('setup-err', 'Password must be at least 8 characters'); return; }
+
+  const spin = document.getElementById('setup-spin');
+  const txt  = document.getElementById('setup-txt');
+  spin.classList.add('show'); txt.textContent = 'Saving…';
+
+  try {
+    const res  = await fetch('/api/setup', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        haUrl:         document.getElementById('ha-url').value.trim(),
+        haToken:       document.getElementById('ha-token').value.trim(),
+        password:      pwd,
+        dashboardName: document.getElementById('dash-name').value.trim() || 'Safrani Home',
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // Setup done — now show login
+      document.getElementById('subtitle').textContent = 'Sign in to continue';
+      gotoStep('step-login');
+    } else {
+      showErr('setup-err', data.error || 'Setup failed');
+    }
+  } catch { showErr('setup-err', 'Server error'); }
+  finally { spin.classList.remove('show'); txt.textContent = 'Save & Finish'; }
+}
+
+async function doLogin() {
+  hideErr('login-err');
+  const pwd = document.getElementById('pwd').value;
+  if (!pwd) return;
+
+  const btn  = document.getElementById('login-btn');
+  const spin = document.getElementById('login-spin');
+  const txt  = document.getElementById('login-txt');
+  btn.disabled = true; spin.classList.add('show'); txt.textContent = 'Signing in…';
+
+  try {
+    const res  = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:pwd}) });
+    const data = await res.json();
+    if (data.token) {
+      sessionStorage.setItem('ha_dash_token', data.token);
+      window.location.href = '/';
+    } else {
+      showErr('login-err', data.error || 'Invalid password');
+    }
+  } catch { showErr('login-err', 'Could not reach server'); }
+  finally { btn.disabled = false; spin.classList.remove('show'); txt.textContent = 'Sign In'; }
+}
+
+// Init — check if already logged in or needs setup
+(async () => {
+  if (sessionStorage.getItem('ha_dash_token')) { window.location.href = '/'; return; }
+
+  try {
+    const res  = await fetch('/api/config');
+    const data = await res.json();
+    if (data.configured) {
+      document.getElementById('subtitle').textContent = 'Sign in to continue';
+      gotoStep('step-login');
+      setTimeout(() => document.getElementById('pwd')?.focus(), 50);
+    } else {
+      document.getElementById('subtitle').textContent = 'First-time setup · takes 2 minutes';
+      gotoStep('step-ha');
+    }
+  } catch {
+    document.getElementById('subtitle').textContent = 'Could not reach server';
+  }
+})();
+</script>
+</body>
+</html>
