@@ -1,0 +1,17 @@
+services:
+  ha-dashboard:
+    image: ghcr.io/raadms/ha-dashboard:latest
+    container_name: ha-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data   # persists your config across container updates
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-change-this-to-a-random-secret}
+      - PORT=3000
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/config"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

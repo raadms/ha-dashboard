@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { -webkit-tap-highlight-color: transparent; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    @apply bg-surface-bg text-white;
+    overscroll-behavior: none;
+    user-select: none;
+  }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { @apply bg-surface-card; }
+  ::-webkit-scrollbar-thumb { @apply bg-surface-elevated rounded-full; }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface-card rounded-2xl border border-surface-border;
+  }
+  .btn-icon {
+    @apply flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95;
+  }
+  .chip {
+    @apply flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium;
+  }
+}
