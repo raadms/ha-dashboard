@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Shield, ShieldOff, Lock, DoorOpen, Cloud, Wifi, WifiOff, User } from 'lucide-react';
+import { Shield, ShieldOff, Lock, DoorOpen, Wifi, WifiOff, User } from 'lucide-react';
 import type { HaEntity } from '../types/ha';
 import { statusEntities } from '../config/rooms';
 

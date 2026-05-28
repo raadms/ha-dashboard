@@ -26,12 +26,8 @@ export default function Dashboard({ entities, connected, token, callService }: P
   function toggleMainEntity(room: RoomConfig) {
     const main = room.entities[0];
     if (!main) return;
-    const entity = entities[main.entity_id];
-    const state = entity?.state ?? 'off';
     const domain = main.type === 'input_boolean' ? 'input_boolean' : main.type === 'light' ? 'light' : 'switch';
     callService(domain, 'toggle', { entity_id: main.entity_id });
-    // Suppress: linter flags unused state — needed for service decision
-    void state;
   }
 
   return (
