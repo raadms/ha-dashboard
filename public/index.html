@@ -524,10 +524,10 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
     <div class="room r-baby" onclick="pop('br')">
       <div class="glow"></div>
       <div class="rt"><div class="rico">👶</div>
-        <div class="rbadges"><span class="rb" style="border-color:rgba(251,113,133,.28);background:rgba(251,113,133,.18);color:#fda4af;">🌙 Night</span><span class="rb rb-ac" data-badge="ac">❄️ AC</span></div>
+        <div class="rbadges"><span class="rb rb-off">💡 Off</span></div>
       </div>
-      <div><div class="rname">Baby Room</div><div class="rmeta">3 lights · AC standby</div>
-        <div class="rbtns"><button class="rbtn rbtn-r" onclick="E(event)">💡 Nightlight</button><button class="rbtn rbtn-off" onclick="E(event)">❄️ Off</button></div>
+      <div><div class="rname">Baby Room</div><div class="rmeta">3 lights</div>
+        <div class="rbtns"><button class="rbtn rbtn-off" onclick="E(event)">💡 Off</button></div>
       </div>
     </div>
 
@@ -1431,28 +1431,31 @@ function alarmPopup(){
     <div class="cpop-title">🛡️ Alarm System</div>
     <div class="cpop-row"><span class="cpop-lbl">Status</span><span style="font-weight:800;color:${color}">${labels[state]??state}</span></div>
     <div id="alm-pin-wrap" style="display:none;margin-top:14px;">
-      <div style="font-size:11px;color:var(--muted2);text-align:center;margin-bottom:10px;">Enter code to disarm</div>
+      <div id="alm-pin-label" style="font-size:11px;color:var(--muted2);text-align:center;margin-bottom:10px;">Enter code to disarm</div>
       <div id="alm-pin-dots" style="text-align:center;font-size:30px;letter-spacing:12px;margin-bottom:14px;color:#38bdf8;">▫▫▫▫</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
         ${pinKeys.map(k=>`<button onclick="almPin('${k}')" style="padding:13px;border-radius:12px;border:none;background:rgba(255,255,255,.10);color:white;font-size:18px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;" onmousedown="this.style.background='rgba(255,255,255,.22)'" onmouseup="this.style.background='rgba(255,255,255,.10)'">${k}</button>`).join('')}
       </div>
     </div>
     <div id="alm-action-btns" class="cpop-btns" style="margin-top:14px;">
-      ${needsDisarm?`<button class="cpop-btn cpop-btn-grn" onclick="almShowPin()">✓ Disarm</button>`:''}
-      <button class="cpop-btn cpop-btn-amb" onclick="window.haAlarm('alarm_arm_home');closeChipPopup()">🏠 Home</button>
-      <button class="cpop-btn cpop-btn-red" onclick="window.haAlarm('alarm_arm_away');closeChipPopup()">🚨 Away</button>
+      ${needsDisarm?`<button class="cpop-btn cpop-btn-grn" onclick="almShowPin('alarm_disarm','Enter code to disarm')">✓ Disarm</button>`:''}
+      <button class="cpop-btn cpop-btn-amb" onclick="almShowPin('alarm_arm_home','🏠 Arm Home — press ✓ to confirm')">🏠 Home</button>
+      <button class="cpop-btn cpop-btn-red" onclick="almShowPin('alarm_arm_away','🚨 Arm Away — press ✓ to confirm')">🚨 Away</button>
     </div>
   </div>`);
 }
-function almShowPin(){
+function almShowPin(action, label){
   window._almPin='';
+  window._almAction = action || 'alarm_disarm';
   document.getElementById('alm-pin-wrap').style.display='block';
   document.getElementById('alm-action-btns').style.display='none';
   document.getElementById('alm-pin-dots').textContent='▫▫▫▫';
+  const lbl=document.getElementById('alm-pin-label');
+  if(lbl) lbl.textContent=label||'Enter code to disarm';
 }
 function almPin(k){
   if(k==='⌫'){ window._almPin=window._almPin.slice(0,-1); }
-  else if(k==='✓'){ window.haAlarm('alarm_disarm',window._almPin); window._almPin=''; closeChipPopup(); return; }
+  else if(k==='✓'){ window.haAlarm(window._almAction||'alarm_disarm',window._almPin); window._almPin=''; closeChipPopup(); return; }
   else if(window._almPin.length<8){ window._almPin+=k; }
   const d=document.getElementById('alm-pin-dots');
   if(d) d.textContent=window._almPin.length?'●'.repeat(window._almPin.length):'▫▫▫▫';

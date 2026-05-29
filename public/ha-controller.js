@@ -68,10 +68,16 @@ function bindButtons() {
   const allOff = document.querySelector('.sh a[onclick]');
   if (allOff) allOff.onclick = () => callHA('homeassistant','turn_off','switch.all_switches_group');
 
-  // Alarm arm/disarm buttons
+  // Alarm arm buttons — open chip popup with optional PIN pad (handles Alarmo code-required configs)
   document.querySelectorAll('.alm-btn').forEach(btn => {
-    if (btn.classList.contains('alm-away')) btn.onclick = () => window.haAlarm('alarm_arm_away');
-    if (btn.classList.contains('alm-home')) btn.onclick = () => window.haAlarm('alarm_arm_home');
+    if (btn.classList.contains('alm-away')) btn.onclick = () => {
+      window.alarmPopup?.();
+      window.almShowPin?.('alarm_arm_away', '🚨 Arm Away — press ✓ to confirm');
+    };
+    if (btn.classList.contains('alm-home')) btn.onclick = () => {
+      window.alarmPopup?.();
+      window.almShowPin?.('alarm_arm_home', '🏠 Arm Home — press ✓ to confirm');
+    };
   });
 
   // Climate page AC +/- and mode buttons
@@ -159,7 +165,7 @@ document.addEventListener('ha-states-updated', (ev) => {
   // ── Greeting sub-text ──
   const _roomDefs = [
     { name:'Living Room', lights:['switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509'], ac:'climate.1e05049f' },
-    { name:'Bedroom',     lights:['switch.masterroom_group_switch'], ac:'climate.1e050116' },
+    { name:'Bedroom',     lights:['switch.masterroom_group_switch','switch.master_bath_left','switch.master_bath_center','switch.master_bath_right'], ac:'climate.1e050116' },
     { name:'Kitchen',     lights:['switch.kitchen_group_switch','light.wled_2'] },
     { name:'Office',      lights:['switch.office_group_swithces'], ac:'climate.1e51b62f' },
     { name:'Baby Room',   lights:['switch.baby_room'] },
@@ -225,7 +231,8 @@ document.addEventListener('ha-states-updated', (ev) => {
     'switch.guest_room_switches','switch.hallway_switches','switch.laundry_light_left',
     'switch.entrance_light_left','switch.entrance_light_right',
     'switch.collidor','switch.betweenroomslights_left','switch.betweenroomslights_right',
-    'light.tv_led','light.wled_2','light.yeelight_colorb_0x1b35f509'];
+    'light.tv_led','light.wled_2','light.yeelight_colorb_0x1b35f509',
+    'switch.master_bath_left','switch.master_bath_center','switch.master_bath_right'];
   const lightsOn = lightEntities.filter(e => s[e]?.state === 'on').length;
   document.querySelectorAll('.sv').forEach((el,i) => {
     if (i===0) {
