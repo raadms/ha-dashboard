@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { validatePassword, signToken, hashPassword } from './auth.js';
+import { validatePassword, signToken, hashPassword, verifyToken as _verifyToken } from './auth.js';
 import { setupWsProxy } from './ws-proxy.js';
 import { isConfigured, loadConfig, saveConfig, getConfig } from './config.js';
 
@@ -12,6 +12,9 @@ const PORT = parseInt(process.env.PORT ?? '3000', 10);
 const PUBLIC_DIR = join(__dirname, '../../public');
 
 loadConfig();
+
+// Short-lived HLS proxy sessions: sid → { haBase, expires }
+const hlsSessions = new Map<string, { haBase: string; expires: number }>();
 
 const app = express();
 app.use(express.json({ limit: '10kb' }));
@@ -123,8 +126,7 @@ app.post('/api/reconfigure', async (req, res) => {
 // Camera proxy — HA token never exposed to browser
 app.get('/api/camera/:entityId', async (req, res) => {
   const token = req.query.token as string | undefined;
-  const { verifyToken } = await import('./auth.js');
-  if (!token || !verifyToken(token)) return res.status(401).send('Unauthorized');
+  if (!token || !_verifyToken(token)) return res.status(401).send('Unauthorized');
   const entityId = req.params.entityId;
   if (!/^camera\.[a-z0-9_]+$/.test(entityId)) return res.status(400).send('Invalid entity');
   const config = getConfig();
@@ -139,6 +141,71 @@ app.get('/api/camera/:entityId', async (req, res) => {
     upstream.body?.pipe(res);
   } catch {
     res.status(502).send('Camera unavailable');
+  }
+});
+
+// Camera HLS stream — asks HA to create a stream, returns our proxied URL
+app.get('/api/camera/:entityId/stream', async (req, res) => {
+  const token = req.query.token as string | undefined;
+  if (!token || !_verifyToken(token)) return res.status(401).json({ error: 'Unauthorized' });
+  const entityId = req.params.entityId;
+  if (!/^camera\.[a-z0-9_]+$/.test(entityId)) return res.status(400).json({ error: 'Invalid entity' });
+  const config = getConfig();
+  if (!config) return res.status(503).json({ error: 'Not configured' });
+  try {
+    const { default: fetch } = await import('node-fetch');
+    const r = await fetch(`${config.haUrl}/api/camera/stream`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${config.haToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entity_id: entityId }),
+    });
+    if (!r.ok) return res.status(502).json({ error: `HA stream API returned ${r.status}` });
+    const data = await r.json() as { url?: string };
+    if (!data.url) return res.status(502).json({ error: 'No stream URL from HA' });
+    // data.url looks like /api/hls/TOKEN/index.m3u8 — extract the base path
+    const haBase = data.url.replace(/[^/]+$/, '');
+    const sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    const expires = Date.now() + 7_200_000;
+    hlsSessions.set(sid, { haBase, expires });
+    setTimeout(() => hlsSessions.delete(sid), 7_200_000);
+    res.json({ url: `/api/hls/${sid}/index.m3u8?token=${encodeURIComponent(token)}` });
+  } catch {
+    res.status(502).json({ error: 'Could not create stream' });
+  }
+});
+
+// HLS segment proxy — rewrites M3U8 playlists to route segments through this server
+app.get('/api/hls/:sid/:file', async (req, res) => {
+  const token = req.query.token as string | undefined;
+  if (!token || !_verifyToken(token)) return res.status(401).send('Unauthorized');
+  const { sid, file } = req.params;
+  if (!/^[a-z0-9]+$/.test(sid) || !/^[\w.\-]+$/.test(file)) return res.status(400).send('Invalid');
+  const session = hlsSessions.get(sid);
+  if (!session || session.expires < Date.now()) return res.status(404).send('Stream expired — reload camera');
+  const config = getConfig();
+  if (!config) return res.status(503).send('Not configured');
+  try {
+    const { default: fetch } = await import('node-fetch');
+    const r = await fetch(`${config.haUrl}${session.haBase}${file}`, {
+      headers: { Authorization: `Bearer ${config.haToken}` },
+    });
+    if (!r.ok) return res.status(r.status).send('Upstream error');
+    const ct = r.headers.get('content-type') ?? 'application/octet-stream';
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (ct.includes('mpegurl') || ct.includes('x-mpegURL') || file.endsWith('.m3u8')) {
+      const text = await r.text();
+      const rewritten = text.replace(/^([^#\n][^\n]*)$/gm, (line) => {
+        const fname = line.split('?')[0].split('/').pop() ?? line;
+        return `/api/hls/${sid}/${fname}?token=${encodeURIComponent(token)}`;
+      });
+      res.send(rewritten);
+    } else {
+      r.body?.pipe(res);
+    }
+  } catch {
+    res.status(502).send('Segment error');
   }
 });
 

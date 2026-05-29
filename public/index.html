@@ -51,7 +51,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 #chips{display:flex;align-items:center;gap:8px;padding:16px 0 8px;flex-shrink:0;flex-wrap:wrap;}
 .chip{display:flex;align-items:center;gap:6px;padding:7px 14px;
   background:var(--g);border:1px solid var(--gb);border-radius:50px;
-  font-size:12px;font-weight:500;cursor:pointer;backdrop-filter:blur(16px);
+  font-size:12px;font-weight:500;cursor:pointer;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   transition:all .2s;white-space:nowrap;}
 .chip:hover{background:var(--gh);transform:translateY(-1px);}
 .chip-grn{border-color:rgba(16,185,129,.35);color:#6ee7b7;}
@@ -98,7 +98,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 .room{position:relative;border-radius:var(--rl);padding:18px 16px 14px;
   cursor:pointer;overflow:hidden;min-height:140px;
   display:flex;flex-direction:column;justify-content:space-between;
-  border:1px solid rgba(255,255,255,.07);backdrop-filter:blur(18px);
+  border:1px solid rgba(255,255,255,.07);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
   transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s;}
 .room:hover{transform:translateY(-5px) scale(1.015);}
 .room:active{transform:scale(.97);}
@@ -138,7 +138,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 .r-off    .rico{background:rgba(255,255,255,.07);}
 
 .rbadges{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;}
-.rb{padding:3px 9px;border-radius:50px;font-size:10px;font-weight:600;backdrop-filter:blur(8px);}
+.rb{padding:3px 9px;border-radius:50px;font-size:10px;font-weight:600;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
 .rb-on {background:rgba(91,141,238,.20);color:#93c5fd;border:1px solid rgba(91,141,238,.28);}
 .rb-ac {background:rgba(56,189,248,.18);color:#7dd3fc;border:1px solid rgba(56,189,248,.28);}
 .rb-grn{background:rgba(16,185,129,.18);color:#6ee7b7;border:1px solid rgba(16,185,129,.28);}
@@ -392,6 +392,39 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 .light-sw:last-child{border-bottom:none;}
 .lsw-name{font-size:13px;font-weight:500;}
 .lsw-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+
+/* ═══ CHIP POPUPS ═══ */
+#cpop-overlay{position:fixed;inset:0;z-index:499;}
+#chip-popup{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:500;
+  width:calc(100% - 44px);max-width:400px;animation:cpopIn .22s cubic-bezier(.34,1.56,.64,1);}
+@keyframes cpopIn{from{opacity:0;transform:translateX(-50%) translateY(-10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+.cpop{background:rgba(8,12,28,.97);border:1px solid rgba(255,255,255,.13);
+  border-radius:20px;padding:18px 20px;backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);
+  box-shadow:0 24px 60px rgba(0,0,0,.7);}
+.cpop-title{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text);}
+.cpop-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;
+  border-bottom:1px solid rgba(255,255,255,.06);}
+.cpop-row:last-of-type{border-bottom:none;}
+.cpop-lbl{font-size:13px;font-weight:600;}
+.cpop-val{font-size:12px;color:var(--muted2);text-align:right;max-width:60%;}
+.cpop-btns{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+.cpop-btn{flex:1;padding:10px 8px;border-radius:12px;border:none;font-size:12px;font-weight:700;
+  cursor:pointer;transition:all .15s;font-family:inherit;min-width:80px;}
+.cpop-btn:active{transform:scale(.95);}
+.cpop-btn-red{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.32);color:#fca5a5;}
+.cpop-btn-grn{background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.32);color:#6ee7b7;}
+.cpop-btn-amb{background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.32);color:#fde68a;}
+
+/* ═══ CAMERA STREAM POPUP ═══ */
+#cam-popup{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.93);
+  display:flex;align-items:center;justify-content:center;padding:20px;}
+.cam-popup-inner{width:100%;max-width:900px;}
+.cam-popup-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+#cam-popup video{width:100%;border-radius:16px;background:#000;max-height:65vh;display:none;}
+#cam-msg{color:#94a3b8;text-align:center;padding:40px 20px;font-size:14px;}
+.cam-close-btn{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.15);color:#fff;
+  border-radius:50%;width:36px;height:36px;font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -400,10 +433,10 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 
 <!-- ══ CHIPS ══ -->
 <div id="chips">
-  <div class="chip chip-grn">🛡️ Disarmed</div>
-  <div class="chip chip-blu">☀️ 32°C · Clear</div>
+  <div class="chip chip-grn" id="alarm-chip" onclick="alarmPopup()">🛡️ Disarmed</div>
+  <div class="chip chip-blu" id="weather-chip" onclick="weatherPopup()">☀️ 32°C · Clear</div>
   <div class="chip chip-grn">🔒 Locked</div>
-  <div class="chip chip-amb" id="prayer-chip">🕌 …</div>
+  <div class="chip chip-amb" id="prayer-chip" onclick="prayerPopup()">🕌 …</div>
   <div class="chip chip-pur">👤 Raed · Home &nbsp;|&nbsp; Rola · Away</div>
   <div class="chip-spacer"></div>
   <div class="chip chip-bell" onclick="scrollToNotifs()" title="Battery Alerts">
@@ -1411,6 +1444,158 @@ function updateBell(){
 }
 function scrollToNotifs(){
   document.getElementById('notif-bar').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ── Chip popups ──────────────────────────────────────────────────────────────
+function showChipPopup(html){
+  closeChipPopup();
+  const ov=document.createElement('div');ov.id='cpop-overlay';ov.onclick=closeChipPopup;
+  document.body.appendChild(ov);
+  const el=document.createElement('div');el.id='chip-popup';el.innerHTML=html;
+  document.body.appendChild(el);
+}
+function closeChipPopup(){
+  document.getElementById('chip-popup')?.remove();
+  document.getElementById('cpop-overlay')?.remove();
+}
+
+const _COND_ICON={'sunny':'☀️','clear-day':'☀️','clear-night':'🌙','cloudy':'☁️',
+  'partlycloudy':'⛅','mostly-cloudy':'🌥️','fog':'🌫️','rainy':'🌧️','snowy':'❄️',
+  'windy':'🌬️','lightning-rainy':'⛈️','lightning':'⛈️','hail':'🌨️','exceptional':'🌡️'};
+
+function weatherPopup(){
+  const s=window.__haEntities??{};
+  const wx=s['weather.forecast_home'];
+  if(!wx){showChipPopup('<div class="cpop"><div class="cpop-title">⛅ Weather</div><div style="color:var(--muted2);font-size:13px;padding:8px 0;">No data yet — waiting for HA</div></div>');return;}
+  const icon=_COND_ICON[wx.state]??'🌡️';
+  const fc=(wx.attributes.forecast??[]).slice(0,5);
+  let rows='';
+  fc.forEach(f=>{
+    const d=new Date(f.datetime);
+    const day=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    const fi=_COND_ICON[f.condition??'']??'🌡️';
+    const rain=f.precipitation_probability!=null?` 💧${f.precipitation_probability}%`:'';
+    rows+=`<div class="cpop-row">
+      <span class="cpop-lbl">${fi} ${day}</span>
+      <span class="cpop-val">${f.templow??'--'}° – ${f.temperature??'--'}°${rain}</span>
+    </div>`;
+  });
+  if(!rows) rows='<div style="color:var(--muted2);font-size:12px;padding:8px 0;">No forecast data</div>';
+  showChipPopup(`<div class="cpop">
+    <div class="cpop-title">${icon} Weather Forecast</div>
+    <div class="cpop-row">
+      <span class="cpop-lbl">Now</span>
+      <span class="cpop-val">${wx.attributes.temperature}°C · ${wx.state} · 💧${wx.attributes.humidity??'--'}% · 🌬️${wx.attributes.wind_speed??'--'} km/h</span>
+    </div>
+    ${rows}
+  </div>`);
+}
+
+function alarmPopup(){
+  const s=window.__haEntities??{};
+  const alarm=s['alarm_control_panel.alarmo'];
+  const state=alarm?.state??'unknown';
+  const labels={disarmed:'✓ Disarmed',armed_away:'🚨 Armed Away',armed_home:'🏠 Armed Home',triggered:'🚨 TRIGGERED',arming:'⏳ Arming…',pending:'⏳ Pending'};
+  const color={'disarmed':'#4ade80','armed_away':'#f87171','armed_home':'#fbbf24','triggered':'#ef4444'}[state]??'#94a3b8';
+  showChipPopup(`<div class="cpop">
+    <div class="cpop-title">🛡️ Alarm System</div>
+    <div class="cpop-row">
+      <span class="cpop-lbl">Status</span>
+      <span style="font-weight:800;color:${color}">${labels[state]??state}</span>
+    </div>
+    <div class="cpop-btns">
+      <button class="cpop-btn cpop-btn-grn" onclick="window.haAlarm('alarm_disarm');closeChipPopup()">✓ Disarm</button>
+      <button class="cpop-btn cpop-btn-amb" onclick="window.haAlarm('alarm_arm_home');closeChipPopup()">🏠 Home</button>
+      <button class="cpop-btn cpop-btn-red" onclick="window.haAlarm('alarm_arm_away');closeChipPopup()">🚨 Away</button>
+    </div>
+  </div>`);
+}
+
+function prayerPopup(){
+  const s=window.__haEntities??{};
+  const list=[
+    {name:'Fajr',   icon:'🌙',e:'sensor.islamic_prayer_times_fajr_prayer'},
+    {name:'Dhuhr',  icon:'☀️',e:'sensor.islamic_prayer_times_dhuhr_prayer'},
+    {name:'Asr',    icon:'🌤️',e:'sensor.islamic_prayer_times_asr_prayer'},
+    {name:'Maghrib',icon:'🌇',e:'sensor.islamic_prayer_times_maghrib_prayer'},
+    {name:'Isha',   icon:'🌃',e:'sensor.islamic_prayer_times_isha_prayer'},
+  ];
+  const now=Date.now();
+  let nextIdx=-1;
+  const times=list.map((p,i)=>{
+    const t=new Date(s[p.e]?.state??0);
+    if(t.getTime()>now && nextIdx===-1) nextIdx=i;
+    return t;
+  });
+  let rows='';
+  list.forEach((p,i)=>{
+    const t=times[i];
+    const valid=t.getTime()>0;
+    const hh=valid?String(t.getHours()).padStart(2,'0'):'--';
+    const mm=valid?String(t.getMinutes()).padStart(2,'0'):'--';
+    const isPast=valid&&t.getTime()<now;
+    const isNext=i===nextIdx;
+    let diffStr='';
+    if(isNext){
+      const diff=Math.round((t.getTime()-now)/60000);
+      diffStr=diff<60?` · in ${diff}m`:` · in ${Math.floor(diff/60)}h ${diff%60}m`;
+    }
+    rows+=`<div class="cpop-row">
+      <span class="cpop-lbl" style="${isNext?'color:#fbbf24;font-weight:800':isPast?'opacity:.45':''}">${p.icon} ${p.name}${isNext?' ◀':''}${diffStr}</span>
+      <span class="cpop-val" style="${isNext?'color:#fde68a':''}">${hh}:${mm}</span>
+    </div>`;
+  });
+  showChipPopup(`<div class="cpop"><div class="cpop-title">🕌 Prayer Times</div>${rows}</div>`);
+}
+
+// ── Camera stream popup ──────────────────────────────────────────────────────
+document.querySelectorAll('.cam').forEach((cam,i)=>{
+  const entities=['camera.g4_doorbell_pro_poe_high_resolution_channel','camera.g4_doorbell_pro_poe_package_camera'];
+  const labels=['G4 Doorbell — Front','G4 Doorbell — Package Cam'];
+  cam.onclick=()=>openCamStream(entities[i],labels[i]);
+});
+
+async function openCamStream(entity,label){
+  const token=sessionStorage.getItem('ha_dash_token');
+  if(!token)return;
+  closeCamPopup();
+  const popup=document.createElement('div');
+  popup.id='cam-popup';
+  popup.innerHTML=`
+    <div class="cam-popup-inner">
+      <div class="cam-popup-hd">
+        <span style="color:#fff;font-weight:700;font-size:15px;">${label}</span>
+        <button class="cam-close-btn" onclick="closeCamPopup()">✕</button>
+      </div>
+      <video id="cam-video" controls autoplay playsinline style="display:none;width:100%;border-radius:16px;background:#000;max-height:65vh;"></video>
+      <div id="cam-msg">⏳ Loading stream…</div>
+    </div>`;
+  document.body.appendChild(popup);
+  try{
+    const r=await fetch(`/api/camera/${entity}/stream?token=${encodeURIComponent(token)}`);
+    const data=await r.json();
+    const video=document.getElementById('cam-video');
+    const msg=document.getElementById('cam-msg');
+    if(data.url&&video){
+      if(msg)msg.style.display='none';
+      video.style.display='block';
+      video.src=data.url;
+      video.play().catch(()=>{});
+    }else{
+      if(msg)msg.textContent='⚠️ Stream unavailable: '+(data.error??'check HA stream integration');
+    }
+  }catch{
+    const msg=document.getElementById('cam-msg');
+    if(msg)msg.textContent='⚠️ Could not connect to stream';
+  }
+}
+
+function closeCamPopup(){
+  const popup=document.getElementById('cam-popup');
+  if(!popup)return;
+  const v=popup.querySelector('video');
+  if(v){v.pause();v.src='';}
+  popup.remove();
 }
 </script>
 </body>

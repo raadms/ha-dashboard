@@ -242,7 +242,7 @@ document.addEventListener('ha-states-updated', (ev) => {
     almEl.textContent = alarmMap[alarmState] ?? alarmState;
     almEl.style.color = alarmState === 'disarmed' ? '#4ade80' : '#f87171';
   }
-  const almChip = document.querySelector('.chip-grn');
+  const almChip = document.getElementById('alarm-chip') ?? document.querySelector('.chip-grn');
   if (almChip) almChip.textContent = alarmMap[alarmState] ? `🛡️ ${alarmMap[alarmState]}` : '🛡️ ...';
 
   // ── Climate page ──
@@ -393,9 +393,8 @@ function updateRoom(s, roomCls, lightEntities, acEntity) {
   const acOn     = acState?.state === 'cool' || acState?.state === 'heat' || acState?.state === 'fan_only';
   const acTemp   = acState?.attributes?.temperature;
 
-  // Toggle room off class
+  // Toggle room off class (never remove the room's own class — it's needed for CSS + querySelector)
   room.classList.toggle('r-off', !lightsOn && !acOn);
-  [roomCls].forEach(c => room.classList.toggle(c, lightsOn || acOn));
 
   // Update badges
   const badges = room.querySelector('.rbadges');
@@ -406,12 +405,17 @@ function updateRoom(s, roomCls, lightEntities, acEntity) {
         b.className = `rb ${lightsOn ? 'rb-on' : 'rb-off'}`;
       }
     });
-    if (acTemp) {
-      badges.querySelectorAll('.rb-ac').forEach(b => { b.textContent = `❄️ ${acTemp}°`; });
-    }
-    if (acEntity && !acOn) {
+    if (acEntity) {
+      const acMode = acState?.state;
+      const acModeIcon = { cool:'❄️', heat:'🌡️', fan_only:'💨', dry:'💧' }[acMode ?? ''] ?? '❄️';
       badges.querySelectorAll('.rb-ac').forEach(b => {
-        b.textContent = '❄️ Off'; b.className = 'rb rb-off';
+        if (acOn && acTemp) {
+          b.textContent = `${acModeIcon} ${acTemp}°`;
+          b.className = 'rb rb-ac';
+        } else {
+          b.textContent = '❄️ Off';
+          b.className = 'rb rb-off';
+        }
       });
     }
   }
@@ -437,12 +441,13 @@ function updateAcCard(s, cls, entity) {
   const badge = card.querySelector('.badge');
   const tempEl = card.querySelector('.actemp');
   const subEl  = card.querySelector('.acsub');
+  const modeLabel = { cool:'❄️ Cool', heat:'🌡️ Heat', fan_only:'💨 Fan', dry:'💧 Dry' }[mode] ?? mode;
   if (badge) {
-    badge.textContent = isOn ? `❄️ ${mode.charAt(0).toUpperCase()+mode.slice(1)}` : 'Off';
+    badge.textContent = isOn ? modeLabel : 'Off';
     badge.className   = isOn ? 'badge badge-c' : 'badge badge-off';
   }
   if (tempEl) tempEl.textContent = isOn ? `${setTemp}°` : '--°';
-  if (subEl)  subEl.textContent  = isOn ? `Set ${setTemp}°C · ${st.attributes?.fan_mode ?? ''}` : 'Standby';
+  if (subEl)  subEl.textContent  = isOn ? `Set ${setTemp}°C · Room ${curTemp}°C · ${st.attributes?.fan_mode ?? ''}` : 'Off';
 }
 
 function updateMedia(s, entity, selector, label) {
