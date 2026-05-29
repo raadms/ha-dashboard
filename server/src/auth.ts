@@ -14,8 +14,18 @@ export async function validatePassword(password: string): Promise<boolean> {
   return bcrypt.compare(password, config.passwordHash);
 }
 
-export function signToken(): string {
-  return jwt.sign({ auth: true }, JWT_SECRET, { expiresIn: '30d' });
+const DURATION_MAP: Record<string, string> = {
+  '5m':    '5m',
+  '1h':    '1h',
+  '24h':   '1d',
+  '7d':    '7d',
+  '30d':   '30d',
+  'never': '3650d',
+};
+
+export function signToken(duration = '30d'): string {
+  const expiry = DURATION_MAP[duration] ?? '30d';
+  return jwt.sign({ auth: true }, JWT_SECRET, { expiresIn: expiry });
 }
 
 export function verifyToken(token: string): boolean {

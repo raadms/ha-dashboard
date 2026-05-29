@@ -92,11 +92,32 @@ app.post('/api/setup', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const ip = req.ip ?? 'unknown';
   if (!rateLimit(ip)) return res.status(429).json({ error: 'Too many attempts, wait a minute' });
-  const { password } = req.body as { password?: string };
+  const { password, duration } = req.body as { password?: string; duration?: string };
   if (!password || !(await validatePassword(password))) {
     return res.status(401).json({ error: 'Invalid password' });
   }
-  res.json({ token: signToken() });
+  res.json({ token: signToken(duration) });
+});
+
+// Reconfigure — verify HA token proves identity, reset password (+ update HA creds)
+app.post('/api/reconfigure', async (req, res) => {
+  if (!isConfigured()) return res.status(400).json({ error: 'Not configured — use /api/setup' });
+  const { haUrl, haToken, newPassword } = req.body as { haUrl?: string; haToken?: string; newPassword?: string };
+  if (!haUrl || !haToken || !newPassword) return res.status(400).json({ error: 'haUrl, haToken and newPassword are required' });
+  if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  try {
+    const { default: fetch } = await import('node-fetch');
+    const test = await fetch(`${haUrl.replace(/\/$/, '')}/api/`, {
+      headers: { Authorization: `Bearer ${haToken}` },
+    });
+    if (!test.ok) return res.status(400).json({ error: 'HA token invalid or HA unreachable — check URL and token' });
+  } catch {
+    return res.status(400).json({ error: 'Could not connect to Home Assistant' });
+  }
+  const passwordHash = await hashPassword(newPassword);
+  const prev = getConfig()!;
+  saveConfig({ ...prev, haUrl: haUrl.replace(/\/$/, ''), haToken, passwordHash });
+  res.json({ ok: true });
 });
 
 // Camera proxy — HA token never exposed to browser

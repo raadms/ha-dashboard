@@ -104,6 +104,23 @@ textarea{font-size:12px;font-family:'SF Mono',Monaco,monospace;line-height:1.5}
 }
 .spinner.show{display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* Session duration pills */
+.dur-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px;}
+.dur-pill{
+  padding:10px 6px;border-radius:12px;border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.05);cursor:pointer;font-size:12px;font-weight:600;
+  color:var(--muted2);text-align:center;transition:all .15s;
+}
+.dur-pill:hover{background:rgba(255,255,255,.10);color:var(--text);}
+.dur-pill.sel{background:rgba(91,141,238,.22);border-color:rgba(91,141,238,.5);color:#93c5fd;}
+
+.forgot-link{
+  display:block;text-align:center;font-size:12px;color:var(--muted);
+  margin-top:14px;cursor:pointer;text-decoration:underline;
+  text-decoration-color:rgba(255,255,255,.2);
+}
+.forgot-link:hover{color:var(--muted2);}
 </style>
 </head>
 <body>
@@ -119,11 +136,25 @@ textarea{font-size:12px;font-family:'SF Mono',Monaco,monospace;line-height:1.5}
         <label>Password</label>
         <input type="password" id="pwd" placeholder="Enter your dashboard password" onkeydown="if(event.key==='Enter')doLogin()"/>
       </div>
+
+      <div class="field">
+        <label>Stay signed in for</label>
+        <div class="dur-grid" id="dur-grid">
+          <div class="dur-pill" data-dur="5m" onclick="selDur(this)">5 min</div>
+          <div class="dur-pill" data-dur="1h" onclick="selDur(this)">1 hour</div>
+          <div class="dur-pill" data-dur="24h" onclick="selDur(this)">24 hours</div>
+          <div class="dur-pill" data-dur="7d" onclick="selDur(this)">7 days</div>
+          <div class="dur-pill sel" data-dur="30d" onclick="selDur(this)">30 days</div>
+          <div class="dur-pill" data-dur="never" onclick="selDur(this)">Never</div>
+        </div>
+      </div>
+
       <div class="err" id="login-err"></div>
       <button class="btn btn-primary" id="login-btn" onclick="doLogin()">
         <span class="spinner" id="login-spin"></span>
         <span id="login-txt">Sign In</span>
       </button>
+      <span class="forgot-link" onclick="gotoStep('step-reconfigure')">Forgot password or updated HA token?</span>
     </div>
 
     <!-- SETUP STEP 1: HA -->
@@ -175,10 +206,51 @@ textarea{font-size:12px;font-family:'SF Mono',Monaco,monospace;line-height:1.5}
       </div>
     </div>
 
+    <!-- RECONFIGURE: reset password / update HA token -->
+    <div class="step" id="step-reconfigure">
+      <div class="step-label">Reset Password / Update HA Token</div>
+      <p style="font-size:12px;color:var(--muted2);margin-bottom:16px;line-height:1.6;">
+        Enter your current HA URL and a valid HA token — this proves you own the system.
+        You can also update your HA token if you created a new one.
+      </p>
+      <div class="field">
+        <label>HA URL</label>
+        <input type="url" id="rc-url" placeholder="https://ha.yourdomain.com"/>
+      </div>
+      <div class="field">
+        <label>HA Long-Lived Token</label>
+        <textarea id="rc-token" rows="3" placeholder="Paste a valid HA long-lived access token"></textarea>
+      </div>
+      <div class="field">
+        <label>New Password</label>
+        <input type="password" id="rc-pwd" placeholder="Minimum 8 characters"/>
+      </div>
+      <div class="field">
+        <label>Confirm New Password</label>
+        <input type="password" id="rc-pwd2" placeholder="Repeat new password" onkeydown="if(event.key==='Enter')doReconfigure()"/>
+      </div>
+      <div class="err" id="rc-err"></div>
+      <div class="ok" id="rc-ok">✅ Password reset — sign in now</div>
+      <div class="btn-row" style="margin-top:16px">
+        <button class="btn btn-secondary" onclick="gotoStep('step-login')">← Back</button>
+        <button class="btn btn-primary" onclick="doReconfigure()">
+          <span class="spinner" id="rc-spin"></span>
+          <span id="rc-txt">Reset Password</span>
+        </button>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <script>
+let _selDur = '30d';
+function selDur(el) {
+  document.querySelectorAll('.dur-pill').forEach(p => p.classList.remove('sel'));
+  el.classList.add('sel');
+  _selDur = el.dataset.dur;
+}
+
 function gotoStep(id) {
   document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
   document.getElementById(id)?.classList.add('active');
@@ -243,7 +315,6 @@ async function doSetup() {
     });
     const data = await res.json();
     if (data.ok) {
-      // Setup done — now show login
       document.getElementById('subtitle').textContent = 'Sign in to continue';
       gotoStep('step-login');
     } else {
@@ -264,7 +335,10 @@ async function doLogin() {
   btn.disabled = true; spin.classList.add('show'); txt.textContent = 'Signing in…';
 
   try {
-    const res  = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:pwd}) });
+    const res  = await fetch('/api/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: pwd, duration: _selDur })
+    });
     const data = await res.json();
     if (data.token) {
       sessionStorage.setItem('ha_dash_token', data.token);
@@ -274,6 +348,38 @@ async function doLogin() {
     }
   } catch { showErr('login-err', 'Could not reach server'); }
   finally { btn.disabled = false; spin.classList.remove('show'); txt.textContent = 'Sign In'; }
+}
+
+async function doReconfigure() {
+  hideErr('rc-err');
+  document.getElementById('rc-ok').classList.remove('show');
+  const url    = document.getElementById('rc-url').value.trim();
+  const token  = document.getElementById('rc-token').value.trim();
+  const pwd    = document.getElementById('rc-pwd').value;
+  const pwd2   = document.getElementById('rc-pwd2').value;
+  if (!url || !token) { showErr('rc-err', 'HA URL and token are required'); return; }
+  if (!pwd)            { showErr('rc-err', 'New password is required'); return; }
+  if (pwd !== pwd2)    { showErr('rc-err', 'Passwords do not match'); return; }
+  if (pwd.length < 8)  { showErr('rc-err', 'Password must be at least 8 characters'); return; }
+
+  const spin = document.getElementById('rc-spin');
+  const txt  = document.getElementById('rc-txt');
+  spin.classList.add('show'); txt.textContent = 'Verifying…';
+
+  try {
+    const res  = await fetch('/api/reconfigure', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ haUrl: url, haToken: token, newPassword: pwd })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('rc-ok').classList.add('show');
+      setTimeout(() => gotoStep('step-login'), 1800);
+    } else {
+      showErr('rc-err', data.error || 'Reset failed');
+    }
+  } catch { showErr('rc-err', 'Could not reach server'); }
+  finally { spin.classList.remove('show'); txt.textContent = 'Reset Password'; }
 }
 
 // Init — check if already logged in or needs setup

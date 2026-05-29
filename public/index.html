@@ -196,6 +196,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 .cam{background:rgba(0,0,0,.45);border:1px solid var(--gb);border-radius:var(--rl);overflow:hidden;cursor:pointer;aspect-ratio:16/9;position:relative;display:flex;align-items:center;justify-content:center;transition:all .2s;}
 .cam:hover{border-color:rgba(91,141,238,.4);transform:scale(1.015);}
 .cam-ph{font-size:52px;color:rgba(255,255,255,.10);}
+.cam-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;display:none;}
 .cam-lbl{position:absolute;bottom:10px;left:12px;font-size:12px;font-weight:600;background:rgba(0,0,0,.72);padding:4px 11px;border-radius:50px;}
 .cam-live{position:absolute;top:10px;right:12px;font-size:10px;font-weight:700;color:#f87171;background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.4);padding:3px 9px;border-radius:50px;display:flex;align-items:center;gap:5px;}
 .dlive{width:6px;height:6px;background:#f87171;border-radius:50%;animation:blink 1.2s infinite;}
@@ -417,48 +418,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
     <div class="nb-title">🔋 Battery Alerts</div>
     <button class="nb-dismiss-all" onclick="dismissAll()">Dismiss All</button>
   </div>
-  <div class="notif-wrap" id="notif-wrap">
-
-    <div class="notif-card notif-crit" id="nf-ipad3">
-      <div class="notif-ico">📱</div>
-      <div class="notif-body">
-        <div class="notif-title">iPad (3) — Critical Battery</div>
-        <div class="notif-sub">Not Charging · sensor.ipad_3_battery_level</div>
-        <div class="notif-batt">
-          <div class="batt-bar"><div class="batt-fill-crit" style="width:1%"></div></div>
-          <div class="batt-pct batt-pct-crit">1%</div>
-        </div>
-      </div>
-      <button class="notif-x" onclick="dismissNotif('nf-ipad3')">✕</button>
-    </div>
-
-    <div class="notif-card notif-crit" id="nf-brush">
-      <div class="notif-ico">🪥</div>
-      <div class="notif-body">
-        <div class="notif-title">Toothbrush (Genius D701) — Critical Battery</div>
-        <div class="notif-sub">sensor.smart_series_9000_10000_0cf5_battery</div>
-        <div class="notif-batt">
-          <div class="batt-bar"><div class="batt-fill-crit" style="width:8%"></div></div>
-          <div class="batt-pct batt-pct-crit">8%</div>
-        </div>
-      </div>
-      <button class="notif-x" onclick="dismissNotif('nf-brush')">✕</button>
-    </div>
-
-    <div class="notif-card notif-warn" id="nf-rola1">
-      <div class="notif-ico">📱</div>
-      <div class="notif-body">
-        <div class="notif-title">Rola1 iPhone — Low Battery</div>
-        <div class="notif-sub">Not Charging · sensor.rola1_battery_level</div>
-        <div class="notif-batt">
-          <div class="batt-bar"><div class="batt-fill-warn" style="width:35%"></div></div>
-          <div class="batt-pct batt-pct-warn">35%</div>
-        </div>
-      </div>
-      <button class="notif-x" onclick="dismissNotif('nf-rola1')">✕</button>
-    </div>
-
-  </div>
+  <div class="notif-wrap" id="notif-wrap"></div>
 </div>
 
 <!-- ══ GREETING ══ -->
@@ -506,7 +466,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
     </div>
 
     <!-- Kitchen -->
-    <div class="room r-off" onclick="pop('kt')">
+    <div class="room r-kit r-off" onclick="pop('kt')">
       <div class="glow"></div>
       <div class="rt"><div class="rico" style="background:rgba(251,191,36,.12);">🍳</div>
         <div class="rbadges"><span class="rb rb-off">Off</span></div>
@@ -632,8 +592,18 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 <div class="page" id="page-security">
   <div class="sh"><h2>Live Cameras</h2></div>
   <div class="cam-grid">
-    <div class="cam"><div class="cam-ph">📷</div><div class="cam-lbl">G4 Doorbell — Front</div><div class="cam-live"><span class="dlive"></span>LIVE</div></div>
-    <div class="cam"><div class="cam-ph">📷</div><div class="cam-lbl">G6 — Entry Camera</div><div class="cam-live"><span class="dlive"></span>LIVE</div></div>
+    <div class="cam">
+      <img class="cam-img" id="cam-img-doorbell" alt="G4 Doorbell">
+      <div class="cam-ph" id="cam-ph-doorbell">📷</div>
+      <div class="cam-lbl">G4 Doorbell — Front</div>
+      <div class="cam-live"><span class="dlive"></span>LIVE</div>
+    </div>
+    <div class="cam">
+      <img class="cam-img" id="cam-img-package" alt="Package Camera">
+      <div class="cam-ph" id="cam-ph-package">📷</div>
+      <div class="cam-lbl">G4 Doorbell — Package Cam</div>
+      <div class="cam-live"><span class="dlive"></span>LIVE</div>
+    </div>
   </div>
   <div class="sh"><h2>Alarm System</h2></div>
   <div class="alm-box">
@@ -884,10 +854,6 @@ const ROOMS={
         <div class="crow"><div><div class="cval">--</div><div class="csub">light.tv_led</div></div><button class="tog off" data-entity="light.tv_led"></button></div>
       </div>
       <div class="ctrl">
-        <div class="clbl">WLED Strip</div>
-        <div class="crow"><div><div class="cval">--</div><div class="csub">light.wled_2</div></div><button class="tog off" data-entity="light.wled_2"></button></div>
-      </div>
-      <div class="ctrl">
         <div class="clbl">Yeelight Bulb</div>
         <div class="crow"><div><div class="cval">--</div><div class="csub">light.yeelight_colorb_0x1b35f509</div></div><button class="tog off" data-entity="light.yeelight_colorb_0x1b35f509"></button></div>
       </div>
@@ -1009,6 +975,13 @@ const ROOMS={
       <div class="ctrl">
         <div class="clbl">KitchenLights Right</div>
         <div class="crow"><div><div class="cval">--</div><div class="csub">switch.kitchenlights_right</div></div><button class="tog off" data-entity="switch.kitchenlights_right"></button></div>
+      </div>
+    </div>
+    <div class="psec">🌈 LED Strip</div>
+    <div class="pc">
+      <div class="ctrl accent-a full">
+        <div class="clbl">WLED Strip (Kitchen)</div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">light.wled_2</div></div><button class="tog off" data-entity="light.wled_2"></button></div>
       </div>
     </div>
     <div class="psec">🏠 Kitchen Appliances</div>
@@ -1377,6 +1350,8 @@ function toggleRadio(){
 
 // ── Battery notification dismiss ──
 function dismissNotif(id){
+  window._battDismissed = window._battDismissed ?? new Set();
+  window._battDismissed.add(id);
   const el=document.getElementById(id);
   if(!el)return;
   el.classList.add('hiding');
@@ -1385,12 +1360,44 @@ function dismissNotif(id){
 function dismissAll(){
   const cards=document.querySelectorAll('.notif-card');
   cards.forEach((c,i)=>{
+    window._battDismissed = window._battDismissed ?? new Set();
+    window._battDismissed.add(c.id);
     setTimeout(()=>{
       c.classList.add('hiding');
       setTimeout(()=>{c.remove();updateBell();},280);
     },i*80);
   });
 }
+
+// ── Camera feeds ──
+function refreshCameras(){
+  const token=sessionStorage.getItem('ha_dash_token');
+  if(!token)return;
+  const feeds=[
+    {img:'cam-img-doorbell',ph:'cam-ph-doorbell',entity:'camera.g4_doorbell_pro_poe_high_resolution_channel'},
+    {img:'cam-img-package', ph:'cam-ph-package', entity:'camera.g4_doorbell_pro_poe_package_camera'},
+  ];
+  feeds.forEach(({img,ph,entity})=>{
+    const el=document.getElementById(img);
+    if(!el)return;
+    const url=`/api/camera/${entity}?token=${encodeURIComponent(token)}&_t=${Date.now()}`;
+    const tmp=new Image();
+    tmp.onload=()=>{
+      el.src=url;el.style.display='block';
+      const phEl=document.getElementById(ph);
+      if(phEl)phEl.style.display='none';
+    };
+    tmp.onerror=()=>{};
+    tmp.src=url;
+  });
+}
+let _camTimer=null;
+const _goOrig=window.go;
+window.go=function(p){
+  _goOrig(p);
+  clearInterval(_camTimer);
+  if(p==='security'){refreshCameras();_camTimer=setInterval(refreshCameras,5000);}
+};
 function updateBell(){
   const count=document.querySelectorAll('.notif-card').length;
   const badge=document.querySelector('.nbadge');

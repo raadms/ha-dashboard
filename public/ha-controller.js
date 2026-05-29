@@ -159,13 +159,9 @@ document.addEventListener('ha-states-updated', (ev) => {
     if (wEl) wEl.textContent = `${icon} ${temp}°C · ${cond}`;
   }
 
-  // ── Battery alerts ──
-  updateBattery(s,'nf-ipad3','sensor.ipad_3_battery_level',20);
-  updateBattery(s,'nf-brush','sensor.smart_series_9000_10000_0cf5_battery',15);
-  updateBattery(s,'nf-rola1','sensor.rola1_battery_level',40);
-  const notifBar = document.getElementById('notif-bar');
-  const notifWrap = document.getElementById('notif-wrap');
-  if (notifBar && notifWrap) notifBar.style.display = notifWrap.children.length ? '' : 'none';
+  // ── Battery alerts (dynamic — threshold from input_number.threshold_battery) ──
+  const battThreshold = parseFloat(s['input_number.threshold_battery']?.state ?? 40);
+  updateBatteryDynamic(s, battThreshold);
 
   // ── Status row ──
   const lightEntities = ['switch.livingroomswitchgroup','switch.kitchen_group_switch',
@@ -187,12 +183,12 @@ document.addEventListener('ha-states-updated', (ev) => {
 
   // ── Room cards ──
   updateRoom(s, 'r-living',
-    ['switch.livingroomswitchgroup','light.tv_led','light.wled_2'],
+    ['switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509'],
     'climate.1e05049f');
   updateRoom(s, 'r-bed',
     ['switch.masterroom_group_switch','switch.master_lights_left','switch.master_lights1_left','switch.master_bath_left'],
     'climate.1e050116');
-  updateRoom(s, 'r-kit',  ['switch.kitchen_group_switch','switch.kitchenlights_left','switch.kitchenlights_right']);
+  updateRoom(s, 'r-kit',  ['switch.kitchen_group_switch','switch.kitchenlights_left','switch.kitchenlights_right','light.wled_2']);
   updateRoom(s, 'r-office',['switch.office_group_swithces','switch.office_light_left','switch.office_light_right'], 'climate.1e51b62f');
   updateRoom(s, 'r-baby', ['switch.baby_room','light.yeelight_colorb_0x1b35f509']);
   updateRoom(s, 'r-guest',['switch.guest_room_switches','switch.guest_light_left','switch.guest_light_right','switch.guest_light_center']);
@@ -288,15 +284,86 @@ document.addEventListener('ha-states-updated', (ev) => {
 });
 
 // ── Helpers ──
-function updateBattery(s, cardId, entityId, threshold) {
-  const pct = parseInt(s[entityId]?.state ?? 101);
-  const card = document.getElementById(cardId);
-  if (!card) return;
-  card.style.display = pct <= threshold ? 'flex' : 'none';
-  const fill  = card.querySelector('[class^="batt-fill"]');
-  const label = card.querySelector('[class^="batt-pct b"]');
-  if (fill)  fill.style.width = pct + '%';
-  if (label) label.textContent = pct + '%';
+
+function updateBatteryDynamic(s, threshold) {
+  const wrap = document.getElementById('notif-wrap');
+  if (!wrap) return;
+
+  // Collect all battery sensors below threshold
+  const low = [];
+  for (const [entityId, state] of Object.entries(s)) {
+    if (!state || !entityId.startsWith('sensor.')) continue;
+    const attrs = state.attributes ?? {};
+    const isBatt = attrs.device_class === 'battery'
+                || entityId.includes('_battery')
+                || entityId.includes('_batt_');
+    if (!isBatt) continue;
+    const pct = parseFloat(state.state);
+    if (isNaN(pct) || pct > threshold) continue;
+    low.push({ entityId, pct, name: attrs.friendly_name ?? entityId.replace('sensor.','').replace(/_/g,' ') });
+  }
+
+  // Remove cards whose battery recovered above threshold
+  wrap.querySelectorAll('.notif-card[data-entity]').forEach(card => {
+    const entity = card.dataset.entity;
+    const pct = parseFloat(s[entity]?.state);
+    if (!isNaN(pct) && pct > threshold) {
+      window._battDismissed?.delete(card.id);
+      card.remove();
+    }
+  });
+
+  // Add / update low-battery cards
+  low.forEach(({ entityId, pct, name }) => {
+    const cardId = 'nbatt_' + entityId.replace(/[^a-z0-9]/gi, '_');
+    if ((window._battDismissed ?? new Set()).has(cardId)) return;
+    const isCrit = pct <= Math.round(threshold * 0.5);
+    const icon   = _battIcon(entityId, name);
+    const level  = isCrit ? 'crit' : 'warn';
+
+    let card = document.getElementById(cardId);
+    if (card) {
+      const fill  = card.querySelector('.batt-fill-crit, .batt-fill-warn');
+      const label = card.querySelector('[class^="batt-pct"]');
+      if (fill)  fill.style.width = pct + '%';
+      if (label) label.textContent = pct + '%';
+    } else {
+      card = document.createElement('div');
+      card.className = `notif-card notif-${level}`;
+      card.id = cardId;
+      card.dataset.entity = entityId;
+      card.innerHTML = `
+        <div class="notif-ico">${icon}</div>
+        <div class="notif-body">
+          <div class="notif-title">${name} — ${isCrit ? 'Critical' : 'Low'} Battery</div>
+          <div class="notif-sub">${entityId}</div>
+          <div class="notif-batt">
+            <div class="batt-bar"><div class="batt-fill-${level}" style="width:${pct}%"></div></div>
+            <div class="batt-pct batt-pct-${level}">${pct}%</div>
+          </div>
+        </div>
+        <button class="notif-x" onclick="dismissNotif('${cardId}')">✕</button>`;
+      wrap.appendChild(card);
+    }
+  });
+
+  // Show/hide bar and update bell badge
+  const bar = document.getElementById('notif-bar');
+  if (bar) bar.style.display = wrap.children.length ? '' : 'none';
+  if (typeof updateBell === 'function') updateBell();
+}
+
+function _battIcon(entityId, name) {
+  const n = (entityId + ' ' + name).toLowerCase();
+  if (n.includes('ipad') || n.includes('tablet'))                    return '📱';
+  if (n.includes('iphone') || n.includes('phone') || n.includes('mobile')) return '📱';
+  if (n.includes('brush') || n.includes('toothbrush'))               return '🪥';
+  if (n.includes('lock'))                                             return '🔒';
+  if (n.includes('door') || n.includes('contact'))                   return '🚪';
+  if (n.includes('motion'))                                           return '🏃';
+  if (n.includes('remote') || n.includes('button'))                  return '🎮';
+  if (n.includes('watch'))                                            return '⌚';
+  return '🔋';
 }
 
 function syncRadio(isOn) {
