@@ -10,7 +10,7 @@ window.haClimateMode = (e,m)=> callHA('climate','set_hvac_mode',   e, {hvac_mode
 window.haScript      = (e)  => callHA('script','turn_on', e);
 window.haInputBtn    = (e)  => callHA('input_button','press', e);
 window.haBoolToggle  = (e)  => callHA('input_boolean','toggle', e);
-window.haAlarm       = (a)  => callHA('alarm_control_panel', a, 'alarm_control_panel.alarmo', {code:''});
+window.haAlarm       = (a, code='') => callHA('alarm_control_panel', a, 'alarm_control_panel.alarmo', {code});
 window.haMediaCmd    = (e,a,x={}) => callHA('media_player', a, e, x);
 
 // ── Connect ──
@@ -227,7 +227,11 @@ document.addEventListener('ha-states-updated', (ev) => {
     'light.tv_led','light.wled_2','light.yeelight_colorb_0x1b35f509'];
   const lightsOn = lightEntities.filter(e => s[e]?.state === 'on').length;
   document.querySelectorAll('.sv').forEach((el,i) => {
-    if (i===0) el.textContent = `${lightsOn} On`;
+    if (i===0) {
+      el.textContent = lightsOn > 0 ? `${lightsOn} On` : 'Off';
+      const ico = document.getElementById('sc-light-ico');
+      if (ico) ico.textContent = lightsOn > 0 ? '💡' : '🔦';
+    }
   });
   const lrAcTemp = s['climate.1e05049f']?.attributes?.current_temperature;
   if (lrAcTemp) document.querySelectorAll('.sv')[1].textContent = `${lrAcTemp}°C`;
@@ -484,8 +488,10 @@ function updateRoom(s, roomCls, lightEntities, acEntity) {
       btn.textContent = lightsOn ? '💡 On' : '💡 Off';
       btn.className = `rbtn ${lightsOn ? _colorCls : 'rbtn-off'}`;
     }
-    if (btn.textContent.includes('❄️'))
-      btn.textContent = acEntity ? (acOn ? `❄️ ${acTemp ?? '--'}°` : '❄️ Off') : btn.textContent;
+    if (btn.textContent.includes('❄️') && acEntity) {
+      btn.textContent = acOn ? `❄️ ${acTemp ?? '--'}°` : '❄️ Off';
+      btn.className = `rbtn ${acOn ? _colorCls : 'rbtn-off'}`;
+    }
   });
 }
 
