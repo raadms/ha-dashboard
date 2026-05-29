@@ -50,7 +50,13 @@ function bindButtons() {
           btn.className = `rbtn ${goingOn ? colorCls : 'rbtn-off'}`;
           if (goingOn) room.classList.remove('r-off');
         }
-        if (cur.includes('❄️') && map.ac)    window.haToggle(map.ac);
+        if (cur.includes('❄️') && map.ac) {
+          const acGoingOn = cur.includes('Off');
+          window.haClimateMode(map.ac, acGoingOn ? 'cool' : 'off');
+          btn.textContent = acGoingOn ? '❄️ Cool' : '❄️ Off';
+          btn.className = `rbtn ${acGoingOn ? colorCls : 'rbtn-off'}`;
+          if (acGoingOn) room.classList.remove('r-off');
+        }
         if (cur.includes('❄️') && map.acOn)  window.haScript(map.acOn);
         if (cur.includes('📺'))              window.haToggle('media_player.lg_webos_tv_uj670v');
         if (cur.includes('🌙') && map.light) window.haToggle(map.light);
@@ -509,9 +515,13 @@ function bindPopupControls() {
     }
     tog.onclick = (e) => {
       e.stopPropagation();
+      const isOn = tog.classList.contains('on');
+      tog.classList.toggle('on', !isOn);
+      tog.classList.toggle('off', isOn);
+      const crow = tog.closest('.crow');
+      if (crow) { const cv = crow.querySelector('.cval'); if (cv) cv.textContent = isOn ? 'Off' : 'On'; }
       if (domain === 'climate') {
-        const cur = getState(entity)?.state;
-        window.haClimateMode(entity, cur === 'off' ? 'cool' : 'off');
+        window.haClimateMode(entity, isOn ? 'off' : 'cool');
       } else if (domain === 'automation') {
         callHA('automation', 'toggle', entity);
       } else {
@@ -536,7 +546,14 @@ function bindPopupControls() {
       const cval = row.querySelector('.cval');
       if (cval && cval.textContent === '--') cval.textContent = isOn ? 'On' : 'Off';
     }
-    tog.onclick = (e) => { e.stopPropagation(); window.haToggle(entity); };
+    tog.onclick = (e) => {
+      e.stopPropagation();
+      const isOn = tog.classList.contains('on');
+      tog.classList.toggle('on', !isOn);
+      tog.classList.toggle('off', isOn);
+      const cv = row.querySelector('.cval'); if (cv) cv.textContent = isOn ? 'Off' : 'On';
+      window.haToggle(entity);
+    };
   });
 
   // 3. Script buttons with data-script attribute
