@@ -13,6 +13,9 @@ window.haBoolToggle  = (e)  => callHA('input_boolean','toggle', e);
 window.haAlarm       = (a, code) => callHA('alarm_control_panel', a, 'alarm_control_panel.alarmo', code ? {code} : {});
 window.haMediaCmd    = (e,a,x={}) => callHA('media_player', a, e, x);
 
+// Track when media enters paused/idle — hide card after 5 min
+const _mediaPauseTimers = new Map();
+
 // ── Connect ──
 connect();
 
@@ -226,19 +229,33 @@ document.addEventListener('ha-states-updated', (ev) => {
   updateBatteryDynamic(s, battThreshold);
 
   // ── Status row ──
-  const lightEntities = ['switch.livingroomswitchgroup','switch.kitchen_group_switch',
-    'switch.masterroom_group_switch','switch.office_group_swithces','switch.baby_room',
-    'switch.guest_room_switches','switch.hallway_switches','switch.laundry_light_left',
-    'switch.entrance_light_left','switch.entrance_light_right',
+  const lightEntities = [
+    // Living Room
+    'switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509',
+    // Kitchen
+    'switch.kitchenlights_left','switch.kitchenlights_right','light.wled_2',
+    // Bedroom
+    'switch.master_lights_left','switch.master_lights_center','switch.master_lights_right',
+    'switch.master_lights1_left','switch.master_lights1_center','switch.master_lights1_right',
+    'switch.master_bath_left','switch.master_bath_center','switch.master_bath_right',
+    // Office
+    'switch.office_light_left','switch.office_light_right',
+    // Baby Room
+    'switch.baby_room',
+    // Guest Room
+    'switch.guest_light_left','switch.guest_light_right','switch.guest_light_center',
+    // Hallway / Entrance
+    'switch.hallway_switches','switch.entrance_light_left','switch.entrance_light_right',
     'switch.collidor','switch.betweenroomslights_left','switch.betweenroomslights_right',
-    'light.tv_led','light.wled_2','light.yeelight_colorb_0x1b35f509',
-    'switch.master_bath_left','switch.master_bath_center','switch.master_bath_right'];
+    // Laundry
+    'switch.laundry_light_left','switch.laundry_light_right',
+  ];
   const lightsOn = lightEntities.filter(e => s[e]?.state === 'on').length;
   document.querySelectorAll('.sv').forEach((el,i) => {
     if (i===0) {
       el.textContent = lightsOn > 0 ? `${lightsOn} On` : 'Off';
       const ico = document.getElementById('sc-light-ico');
-      if (ico) ico.textContent = lightsOn > 0 ? '💡' : '🔦';
+      if (ico) ico.style.opacity = lightsOn > 0 ? '1' : '0.35';
     }
   });
   const _acEntities = ['climate.1e05049f','climate.1e050116','climate.1e51b62f','climate.1e51bb2c'];
@@ -316,6 +333,15 @@ document.addEventListener('ha-states-updated', (ev) => {
   }
   const almChip = document.getElementById('alarm-chip') ?? document.querySelector('.chip-grn');
   if (almChip) almChip.textContent = alarmMap[alarmState] ? `🛡️ ${alarmMap[alarmState]}` : '🛡️ ...';
+
+  const doorSt = s['binary_sensor.maindoorsensor_contact']?.state;
+  const doorEl = document.getElementById('door-chip');
+  if (doorEl) {
+    const doorOpen = doorSt === 'on';
+    doorEl.textContent = doorOpen ? '🚪 Door · Open' : '🚪 Door · Closed';
+    doorEl.style.borderColor = doorOpen ? 'rgba(239,68,68,.5)' : '';
+    doorEl.style.color = doorOpen ? '#f87171' : '';
+  }
 
   // ── Climate page ──
   updateAcCard(s,'ac-lr','climate.1e05049f');
@@ -544,8 +570,30 @@ function updateMedia(s, entity, selector, label) {
   if (!card) return;
   const st = s[entity];
   const isOff = !st || st.state === 'off' || st.state === 'unavailable' || st.state === 'standby';
-  card.style.display = isOff ? 'none' : '';
-  if (isOff) return;
+  if (isOff) {
+    card.style.display = 'none';
+    if (_mediaPauseTimers.has(entity)) { clearTimeout(_mediaPauseTimers.get(entity)); _mediaPauseTimers.delete(entity); }
+    return;
+  }
+  const isIdleOrPaused = st.state === 'idle' || st.state === 'paused';
+  if (!isIdleOrPaused) {
+    if (_mediaPauseTimers.has(entity)) { clearTimeout(_mediaPauseTimers.get(entity)); _mediaPauseTimers.delete(entity); }
+  } else if (!_mediaPauseTimers.has(entity)) {
+    const tid = setTimeout(() => {
+      const c = document.querySelector(selector);
+      if (c) c.style.display = 'none';
+      _mediaPauseTimers.delete(entity);
+      const anyMedia = ['.mc-tv','.mc-atv','#homepod-card'].some(sel => {
+        const c2 = document.querySelector(sel); return c2 && c2.style.display !== 'none';
+      });
+      const _npSh2 = document.getElementById('now-playing-sh');
+      const _npRow2 = document.getElementById('now-playing-row');
+      if (_npSh2) _npSh2.style.display = anyMedia ? '' : 'none';
+      if (_npRow2) _npRow2.style.display = anyMedia ? '' : 'none';
+    }, 5 * 60 * 1000);
+    _mediaPauseTimers.set(entity, tid);
+  }
+  card.style.display = '';
   const playing = st.state === 'playing';
   const titleEl = card.querySelector('.mtit');
   const subEl   = card.querySelector('.msub');

@@ -263,7 +263,8 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 .page.active{display:block;}
 
 /* ═══ BOTTOM NAV ═══ */
-#nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:1440px;padding:0 22px 18px;z-index:100;}
+#nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:1440px;padding:0 22px 18px;z-index:100;transition:transform .35s cubic-bezier(.32,1.25,.64,1);}
+#nav.nav-hidden{transform:translateX(-50%) translateY(110%);}
 .navp{display:flex;justify-content:space-around;background:rgba(7,9,15,.90);backdrop-filter:blur(30px) saturate(200%);border:1px solid rgba(255,255,255,.10);border-radius:30px;padding:6px 8px;box-shadow:0 -2px 40px rgba(0,0,0,.6),0 8px 30px rgba(0,0,0,.5);}
 .ni{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 22px;border-radius:22px;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted);transition:all .2s;min-width:72px;}
 .ni.active{color:#5b8dee;background:rgba(91,141,238,.13);}
@@ -433,6 +434,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 
 <!-- ══ CHIPS ══ -->
 <div id="chips">
+  <div class="chip chip-amb" id="door-chip" onclick="doorPopup()">🚪 Door · Closed</div>
   <div class="chip chip-grn" id="alarm-chip" onclick="alarmPopup()">🛡️ Disarmed</div>
   <div class="chip chip-blu" id="weather-chip" onclick="weatherPopup()">☀️ 32°C · Clear</div>
   <div class="chip chip-grn">🔒 Locked</div>
@@ -513,7 +515,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
     <div class="room r-office" onclick="pop('of')">
       <div class="glow"></div>
       <div class="rt"><div class="rico">💼</div>
-        <div class="rbadges"><span class="rb rb-on" style="border-color:rgba(6,182,212,.28);background:rgba(6,182,212,.18);color:#67e8f9;">💡 On</span></div>
+        <div class="rbadges"><span class="rb rb-off" data-badge="ac">❄️ Off</span><span class="rb rb-on" style="border-color:rgba(6,182,212,.28);background:rgba(6,182,212,.18);color:#67e8f9;">💡 On</span></div>
       </div>
       <div><div class="rname">Office</div><div class="rmeta">2 lights on · AC standby</div>
         <div class="rbtns"><button class="rbtn rbtn-c" onclick="E(event)">💡 On</button><button class="rbtn rbtn-off" onclick="E(event)">❄️ Off</button></div>
@@ -557,7 +559,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
     <div class="room r-laundry" onclick="pop('ln')">
       <div class="glow"></div>
       <div class="rt"><div class="rico">🧺</div>
-        <div class="rbadges"><span class="rb rb-off">Off</span></div>
+        <div class="rbadges"><span class="rb rb-off" data-badge="ac">❄️ Off</span><span class="rb rb-off">💡 Off</span></div>
       </div>
       <div><div class="rname">Laundry</div><div class="rmeta">2 lights · AC standby</div>
         <div class="rbtns"><button class="rbtn rbtn-off" onclick="E(event)">💡 Off</button><button class="rbtn rbtn-off" onclick="E(event)">❄️ Off</button></div>
@@ -592,7 +594,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
   <div class="apps">
 
     <!-- Netflix -->
-    <div class="app nf"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#E50914"/><path fill-rule="evenodd" d="M7 7h5.5L23.5 29H29V7h-5.5L12.5 29H7Z" fill="white"/></svg></span><span class="an">Netflix</span></div>
+    <div class="app nf"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#141414"/><path fill-rule="evenodd" d="M7 7h5.5L23.5 29H29V7h-5.5L12.5 29H7Z" fill="#E50914"/></svg></span><span class="an">Netflix</span></div>
 
     <!-- YouTube -->
     <div class="app yt"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#FF0000"/><rect x="5" y="9" width="26" height="18" rx="5" fill="white"/><polygon points="14,13 14,23 25,18" fill="#FF0000"/></svg></span><span class="an">YouTube</span></div>
@@ -1305,6 +1307,19 @@ let sy=0;
 document.getElementById('popup').addEventListener('touchstart',e=>{sy=e.touches[0].clientY;});
 document.getElementById('popup').addEventListener('touchmove',e=>{if(e.touches[0].clientY-sy>70)closeP();});
 
+// ── Nav auto-hide: visible only at bottom of page ──
+(function(){
+  const main=document.getElementById('main');
+  const nav=document.getElementById('nav');
+  function _navVis(){
+    const atBottom=main.scrollTop+main.clientHeight>=main.scrollHeight-80;
+    nav.classList.toggle('nav-hidden',!atBottom);
+  }
+  main.addEventListener('scroll',_navVis,{passive:true});
+  // Start hidden if content is scrollable
+  requestAnimationFrame(_navVis);
+})();
+
 // ── Radio toggle — replaced at runtime by ha-controller.js (window.toggleRadio) ──
 function toggleRadio(){}
 
@@ -1395,7 +1410,7 @@ function weatherPopup(){
   const wx=s['weather.forecast_home'];
   if(!wx){showChipPopup('<div class="cpop"><div class="cpop-title">⛅ Weather</div><div style="color:var(--muted2);font-size:13px;padding:8px 0;">No data yet — waiting for HA</div></div>');return;}
   const icon=_COND_ICON[wx.state]??'🌡️';
-  const fc=(wx.attributes.forecast??[]).slice(0,5);
+  const fc=(wx.attributes.forecast??[]).slice(0,7);
   let rows='';
   fc.forEach(f=>{
     const d=new Date(f.datetime);
@@ -1461,6 +1476,20 @@ function almPin(k){
   if(d) d.textContent=window._almPin.length?'●'.repeat(window._almPin.length):'▫▫▫▫';
 }
 
+function doorPopup(){
+  const s=window.__haEntities??{};
+  const st=s['binary_sensor.maindoorsensor_contact'];
+  const isOpen=st?.state==='on';
+  const lc=st?.last_changed?new Date(st.last_changed):null;
+  const timeStr=lc?lc.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):'--';
+  const dateStr=lc?lc.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';
+  showChipPopup(`<div class="cpop">
+    <div class="cpop-title">🚪 Main Door</div>
+    <div class="cpop-row"><span class="cpop-lbl">Status</span><span style="font-weight:800;color:${isOpen?'#f87171':'#4ade80'}">${isOpen?'🔴 Open':'✅ Closed'}</span></div>
+    <div class="cpop-row"><span class="cpop-lbl">Last changed</span><span class="cpop-val">${timeStr}${dateStr?' · '+dateStr:''}</span></div>
+  </div>`);
+}
+
 function prayerPopup(){
   const s=window.__haEntities??{};
   const list=[
@@ -1502,24 +1531,49 @@ function prayerPopup(){
 function lightsPopup(){
   const s=window.__haEntities??{};
   const all=[
-    {name:'Living Room',   e:'switch.livingroomswitchgroup'},
-    {name:'Bedroom',       e:'switch.masterroom_group_switch'},
-    {name:'Kitchen',       e:'switch.kitchen_group_switch'},
-    {name:'Office',        e:'switch.office_group_swithces'},
-    {name:'Baby Room',     e:'switch.baby_room'},
-    {name:'Guest Room',    e:'switch.guest_room_switches'},
-    {name:'Hallway',       e:'switch.hallway_switches'},
-    {name:'TV LED Strip',  e:'light.tv_led'},
-    {name:'Yeelight Bulb', e:'light.yeelight_colorb_0x1b35f509'},
-    {name:'Kitchen WLED',  e:'light.wled_2'},
-    {name:'Laundry Left',  e:'switch.laundry_light_left'},
-    {name:'Laundry Right', e:'switch.laundry_light_right'},
+    // Living Room
+    {name:'Living Room · Main',    e:'switch.livingroomswitchgroup'},
+    {name:'Living Room · TV LED',  e:'light.tv_led'},
+    {name:'Living Room · Yeelight',e:'light.yeelight_colorb_0x1b35f509'},
+    // Kitchen
+    {name:'Kitchen · Left',        e:'switch.kitchenlights_left'},
+    {name:'Kitchen · Right',       e:'switch.kitchenlights_right'},
+    {name:'Kitchen · WLED',        e:'light.wled_2'},
+    // Master Bedroom
+    {name:'Bedroom · Lights 1 Left',  e:'switch.master_lights_left'},
+    {name:'Bedroom · Lights 1 Center',e:'switch.master_lights_center'},
+    {name:'Bedroom · Lights 1 Right', e:'switch.master_lights_right'},
+    {name:'Bedroom · Lights 2 Left',  e:'switch.master_lights1_left'},
+    {name:'Bedroom · Lights 2 Center',e:'switch.master_lights1_center'},
+    {name:'Bedroom · Lights 2 Right', e:'switch.master_lights1_right'},
+    // Master Bath
+    {name:'Master Bath · Left',    e:'switch.master_bath_left'},
+    {name:'Master Bath · Center',  e:'switch.master_bath_center'},
+    {name:'Master Bath · Right',   e:'switch.master_bath_right'},
+    // Office
+    {name:'Office · Left',         e:'switch.office_light_left'},
+    {name:'Office · Right',        e:'switch.office_light_right'},
+    // Baby Room
+    {name:'Baby Room',             e:'switch.baby_room'},
+    // Guest Room
+    {name:'Guest Room · Left',     e:'switch.guest_light_left'},
+    {name:'Guest Room · Right',    e:'switch.guest_light_right'},
+    {name:'Guest Room · Center',   e:'switch.guest_light_center'},
+    // Hallway
+    {name:'Hallway · Main',        e:'switch.hallway_switches'},
+    {name:'Hallway · Corridor',    e:'switch.collidor'},
+    {name:'Hallway · Between L',   e:'switch.betweenroomslights_left'},
+    {name:'Hallway · Between R',   e:'switch.betweenroomslights_right'},
+    {name:'Entrance · Left',       e:'switch.entrance_light_left'},
+    {name:'Entrance · Right',      e:'switch.entrance_light_right'},
+    // Laundry
+    {name:'Laundry · Left',        e:'switch.laundry_light_left'},
+    {name:'Laundry · Right',       e:'switch.laundry_light_right'},
   ];
   const on=all.filter(l=>s[l.e]?.state==='on');
-  const off=all.filter(l=>s[l.e]?.state==='off');
   let rows='';
   if(!on.length){rows='<div style="color:var(--muted2);font-size:13px;padding:10px 0;text-align:center;">All lights are off</div>';}
-  else{on.forEach(l=>{rows+=`<div class="cpop-row"><span class="cpop-lbl">💡 ${l.name}</span><button class="tog on" onclick="window.haToggle('${l.e}');this.classList.toggle('on');this.classList.toggle('off');"></button></div>`;});}
+  else{on.forEach(l=>{rows+=`<div class="cpop-row"><div><div class="cpop-lbl">💡 ${l.name}</div><div style="font-size:10px;color:var(--muted2);margin-top:1px;">${l.e}</div></div><button class="tog on" onclick="window.haToggle('${l.e}');this.classList.toggle('on');this.classList.toggle('off');"></button></div>`; });}
   const allOffBtn=on.length>1?`<button class="cpop-btn cpop-btn-red" style="flex:1;" onclick="window.callHA('homeassistant','turn_off','switch.all_switches_group');closeChipPopup()">🔴 All Off</button>`:'';
   showChipPopup(`<div class="cpop"><div class="cpop-title">💡 Lights — ${on.length?on.length+' On':'All Off'}</div>${rows}${on.length?`<div class="cpop-btns" style="margin-top:12px;">${allOffBtn}</div>`:''}</div>`);
 }
