@@ -856,61 +856,59 @@ function E(ev){ev.stopPropagation();}
 // ── Popup rooms data ──
 const ROOMS={
   lr:{
-    ico:'🛋️',bg:'rgba(91,141,238,.22)',name:'Living Room',sub:'3 lights on · AC cooling 23°C · TV playing',
+    ico:'🛋️',bg:'rgba(91,141,238,.22)',name:'Living Room',sub:'Living room lights & AC',
     html:`
     <div class="psec">💡 Lighting</div>
     <div class="pc">
       <div class="ctrl accent-b full">
         <div class="clbl">Main Group — All Lights</div>
-        <div class="crow"><div><div class="cval">On</div><div class="csub">3 switches active</div></div><button class="tog on"></button></div>
-        <div class="scenes" style="margin-top:14px;"><button class="scene on">Normal</button><button class="scene off">Movie 🎬</button><button class="scene off">Dim 🌙</button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.livingroomswitchgroup</div></div><button class="tog off" data-entity="switch.livingroomswitchgroup"></button></div>
       </div>
       <div class="ctrl">
-        <div class="clbl">Switch 1 — Left</div>
-        <div class="light-sw"><div><div class="lsw-name">Left Light</div></div><button class="tog on"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Center Light</div></div><button class="tog on"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Right Light</div></div><button class="tog off"></button></div>
+        <div class="clbl">Switch 1</div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off" data-entity="switch.livingroomswitch1_left"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off" data-entity="switch.livingroomswitch1_center"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off" data-entity="switch.livingroomswitch1_right"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Switch 2</div>
-        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog on"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog on"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off" data-entity="switch.livingroomswitch2_left"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off" data-entity="switch.livingroomswitch2_center"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off" data-entity="switch.livingroomswitch2_right"></button></div>
       </div>
     </div>
     <div class="psec">🌈 LED Strips</div>
     <div class="pc">
       <div class="ctrl accent-b">
         <div class="clbl">TV LED Strip</div>
-        <div class="crow"><div><div class="cval">On · Amber</div><div class="csub">Brightness 80%</div></div><button class="tog on"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">light.tv_led</div></div><button class="tog off" data-entity="light.tv_led"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">WLED Strip</div>
-        <div class="crow"><div><div class="cval">On</div><div class="csub">Rainbow effect</div></div><button class="tog on"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">light.wled_2</div></div><button class="tog off" data-entity="light.wled_2"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Yeelight Bulb</div>
-        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">light.yeelight_colorb_0x1b35f509</div></div><button class="tog off" data-entity="light.yeelight_colorb_0x1b35f509"></button></div>
       </div>
     </div>
     <div class="psec">❄️ Air Conditioning</div>
     <div class="pc">
       <div class="ctrl accent-b full">
-        <div class="clbl">Living Room AC — Gree Unit</div>
-        <div class="tempd"><span class="tbig" style="color:#38bdf8">23</span><span class="tunit">°C</span></div>
-        <div class="csub">Cooling · Fan Auto · Feels 21°C · Panel Light On</div>
+        <div class="clbl">Living Room AC — Gree (climate.1e05049f)</div>
+        <div class="tempd"><span class="tbig" style="color:#38bdf8">--</span><span class="tunit">°C</span></div>
+        <div class="csub">Standby</div>
         <input class="tslider" type="range" min="16" max="30" value="23"
-          style="--c:#38bdf8" oninput="slup(this)">
+          style="--c:#38bdf8" oninput="slup(this)" data-ac="climate.1e05049f">
         <div class="scenes">
-          <button class="scene on">❄️ Cool</button>
+          <button class="scene off">❄️ Cool</button>
           <button class="scene off">💨 Fan</button>
           <button class="scene off">🌡️ Heat</button>
           <button class="scene off">Off</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-          <button class="sbtn sbtn-b" style="flex:1;font-size:11px;">🔇 Quiet</button>
-          <button class="sbtn sbtn-c" style="flex:1;font-size:11px;">🌬️ Fresh Air</button>
-          <button class="sbtn sbtn-a" style="flex:1;font-size:11px;">Fan: Auto</button>
+          <button class="sbtn sbtn-b" style="flex:1;font-size:11px;" data-ac-sw="switch.1e05049f_quiet">🔇 Quiet</button>
+          <button class="sbtn sbtn-c" style="flex:1;font-size:11px;" data-ac-sw="switch.1e05049f_fresh_air">🌬️ Fresh Air</button>
         </div>
       </div>
     </div>
@@ -940,124 +938,126 @@ const ROOMS={
   },
 
   bd:{
-    ico:'🛏️',bg:'rgba(167,139,250,.22)',name:'Master Bedroom',sub:'5 lights on · AC cooling 22°C',
+    ico:'🛏️',bg:'rgba(167,139,250,.22)',name:'Master Bedroom',sub:'Master bedroom lights & AC',
     html:`
     <div class="psec">💡 Bedroom Lights</div>
     <div class="pc">
       <div class="ctrl accent-p full">
         <div class="clbl">Master Room Group</div>
-        <div class="crow"><div><div class="cval">On</div><div class="csub">Group switch</div></div><button class="tog on tog-p"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.masterroom_group_switch</div></div><button class="tog off tog-p" data-entity="switch.masterroom_group_switch"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Master Lights 1</div>
-        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog on tog-p"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-p"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p" data-entity="switch.master_lights1_left"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off tog-p" data-entity="switch.master_lights1_center"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-p" data-entity="switch.master_lights1_right"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Master Lights 2</div>
-        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog on tog-p"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-p"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p" data-entity="switch.master_lights_left"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off tog-p" data-entity="switch.master_lights_center"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-p" data-entity="switch.master_lights_right"></button></div>
       </div>
     </div>
     <div class="psec">🚿 Master Bathroom</div>
     <div class="pc">
       <div class="ctrl accent-p">
         <div class="clbl">Bathroom Lights</div>
-        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off tog-p"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog on tog-p"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p" data-entity="switch.master_bath_left"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off tog-p" data-entity="switch.master_bath_center"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-p" data-entity="switch.master_bath_right"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Bath Fan / Automation</div>
-        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">automation.master_bath_fan</div></div><button class="tog off" data-entity="automation.master_bath_fan"></button></div>
       </div>
     </div>
     <div class="psec">❄️ Bedroom AC</div>
     <div class="pc">
       <div class="ctrl accent-p full">
         <div class="clbl">Bedroom AC — Gree (climate.1e050116)</div>
-        <div class="tempd"><span class="tbig" style="color:#a78bfa">22</span><span class="tunit">°C</span></div>
-        <div class="csub">Cooling · Quiet Mode · Humidity 38% · Feels 21°C</div>
-        <input class="tslider" type="range" min="16" max="30" value="22" oninput="slup(this)" style="--c:#a78bfa">
+        <div class="tempd"><span class="tbig" style="color:#a78bfa">--</span><span class="tunit">°C</span></div>
+        <div class="csub">Standby</div>
+        <input class="tslider" type="range" min="16" max="30" value="22" oninput="slup(this)" style="--c:#a78bfa" data-ac="climate.1e050116">
         <div class="scenes">
-          <button class="scene on">❄️ Cool</button>
+          <button class="scene off">❄️ Cool</button>
           <button class="scene off">💨 Fan</button>
           <button class="scene off">🌡️ Heat</button>
           <button class="scene off">Off</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;">
-          <button class="sbtn sbtn-p" style="flex:1;font-size:11px;">🔇 Quiet ON</button>
-          <button class="sbtn" style="flex:1;font-size:11px;background:rgba(255,255,255,.07);color:var(--muted);">Quiet OFF</button>
-          <button class="sbtn sbtn-a" style="flex:1;font-size:11px;">🌅 Auto Off 6am</button>
+          <button class="sbtn sbtn-p" style="flex:1;font-size:11px;" data-ac-sw="switch.1e050116_quiet">🔇 Quiet</button>
+          <button class="sbtn sbtn-b" style="flex:1;font-size:11px;" data-ac-sw="switch.1e050116_fresh_air">🌬️ Fresh Air</button>
         </div>
       </div>
     </div>`
   },
 
   kt:{
-    ico:'🍳',bg:'rgba(251,191,36,.18)',name:'Kitchen',sub:'All lights off · No motion',
+    ico:'🍳',bg:'rgba(251,191,36,.18)',name:'Kitchen',sub:'Kitchen lights & appliances',
     html:`
     <div class="psec">💡 Kitchen Lights</div>
     <div class="pc">
       <div class="ctrl accent-a full">
         <div class="clbl">Kitchen Group Switch</div>
-        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.kitchen_group_switch</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.kitchen_group_switch</div></div><button class="tog off" data-entity="switch.kitchen_group_switch"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">KitchenLights Left</div>
-        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.kitchenlights_left</div></div><button class="tog off" data-entity="switch.kitchenlights_left"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">KitchenLights Right</div>
-        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.kitchenlights_right</div></div><button class="tog off" data-entity="switch.kitchenlights_right"></button></div>
       </div>
     </div>
     <div class="psec">🏠 Kitchen Appliances</div>
     <div class="pc">
       <div class="ctrl accent-a">
         <div class="clbl">Dishwasher</div>
-        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.150633095099407_power</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.150633095099407_power</div></div><button class="tog off" data-entity="switch.150633095099407_power"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">💧 Water Filter</div>
-        <div class="crow"><div><div class="cval" style="color:#4ade80">On</div><div class="csub">Athom Smart Plug</div></div><button class="tog on" style="background:#10b981;"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.athom_smart_plug_v3_50b5b0_power</div></div><button class="tog off" data-entity="switch.athom_smart_plug_v3_50b5b0_power"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">📞 Intercom</div>
-        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.intercom</div></div><button class="tog off" data-entity="switch.intercom"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Motion Sensor</div>
-        <div class="crow"><div><div class="cval" style="color:#4ade80">Clear</div><div class="csub">No occupancy detected</div></div><span style="font-size:22px">✅</span></div>
+        <div class="crow"><div><div class="cval" id="kt-motion">--</div><div class="csub">binary_sensor.kitchensensor_occupancy</div></div><span style="font-size:22px" id="kt-motion-icon">--</span></div>
       </div>
     </div>`
   },
 
   of:{
-    ico:'💼',bg:'rgba(6,182,212,.22)',name:'Office',sub:'2 lights on · AC standby',
+    ico:'💼',bg:'rgba(6,182,212,.22)',name:'Office',sub:'Office lights & AC',
     html:`
     <div class="psec">💡 Office Lights</div>
     <div class="pc">
       <div class="ctrl accent-c full">
         <div class="clbl">Office Group</div>
-        <div class="crow"><div><div class="cval">On</div><div class="csub">Both switches active</div></div><button class="tog on tog-c"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.office_group_swithces</div></div><button class="tog off tog-c" data-entity="switch.office_group_swithces"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Office Light Switch</div>
-        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog on tog-c"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog on tog-c"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-c" data-entity="switch.office_light_left"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-c" data-entity="switch.office_light_right"></button></div>
       </div>
     </div>
     <div class="psec">❄️ Office AC</div>
     <div class="pc">
       <div class="ctrl accent-c full">
-        <div class="clbl">Office AC — Gree Unit</div>
-        <div class="crow"><div><div class="cval">Off · Standby</div><div class="csub">Auto-on when temp &gt; 30°C</div></div><button class="tog off tog-c"></button></div>
+        <div class="clbl">Office AC — Gree (climate.1e51b62f)</div>
+        <div class="tempd"><span class="tbig" style="color:#22d3ee">--</span><span class="tunit">°C</span></div>
+        <div class="csub" id="of-ac-sub">Standby</div>
+        <input class="tslider" type="range" min="16" max="30" value="23" style="--c:#22d3ee" oninput="slup(this)" data-ac="climate.1e51b62f">
         <div class="scenes" style="margin-top:14px;">
           <button class="scene off">❄️ Cool</button>
           <button class="scene off">💨 Fan</button>
+          <button class="scene off">🌡️ Heat</button>
           <button class="scene off">Off</button>
         </div>
       </div>
@@ -1065,26 +1065,21 @@ const ROOMS={
   },
 
   br:{
-    ico:'👶',bg:'rgba(251,113,133,.22)',name:'Baby Room',sub:'Lights · AC standby',
+    ico:'👶',bg:'rgba(251,113,133,.22)',name:'Baby Room',sub:'Baby room lights & AC',
     html:`
     <div class="psec">💡 Baby Room Lights</div>
     <div class="pc">
       <div class="ctrl accent-r full">
         <div class="clbl">Baby Room Main Switch</div>
-        <div class="crow"><div><div class="cval">On · Nightlight</div><div class="csub">switch.baby_room</div></div><button class="tog on" style="background:#fb7185;"></button></div>
-        <div class="scenes" style="margin-top:12px;">
-          <button class="scene on">🌙 Nightlight</button>
-          <button class="scene off">💡 Full</button>
-          <button class="scene off">Off</button>
-        </div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.baby_room</div></div><button class="tog off" data-entity="switch.baby_room" style="background:#fb7185;"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Baby Lights Left</div>
-        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.laundry_light_left</div></div><button class="tog off" style=""></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.laundry_light_left</div></div><button class="tog off" data-entity="switch.laundry_light_left"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Baby Lights Right</div>
-        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.laundry_light_right</div></div><button class="tog off" style=""></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.laundry_light_right</div></div><button class="tog off" data-entity="switch.laundry_light_right"></button></div>
       </div>
     </div>
     <div class="psec">❄️ Baby Room AC</div>
@@ -1092,9 +1087,9 @@ const ROOMS={
       <div class="ctrl accent-r full">
         <div class="clbl">Baby Room AC — Gree (climate.1e51bb2c)</div>
         <div class="tempd"><span class="tbig" style="color:#fb7185">--</span><span class="tunit">°C</span></div>
-        <div class="csub">Standby · Tap to activate</div>
+        <div class="csub">Standby</div>
         <input class="tslider" type="range" min="16" max="30" value="24"
-          style="--c:#fb7185" oninput="slup(this)">
+          style="--c:#fb7185" oninput="slup(this)" data-ac="climate.1e51bb2c">
         <div class="scenes">
           <button class="scene off">❄️ Cool</button>
           <button class="scene off">💨 Fan</button>
@@ -1102,28 +1097,27 @@ const ROOMS={
           <button class="scene off">⏹ Off</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-          <button class="sbtn sbtn-r" style="flex:1;font-size:11px;">🔇 Quiet</button>
-          <button class="sbtn sbtn-b" style="flex:1;font-size:11px;">🌬️ Fresh Air</button>
-          <button class="sbtn sbtn-a" style="flex:1;font-size:11px;">💤 Sleep Mode</button>
+          <button class="sbtn sbtn-r" style="flex:1;font-size:11px;" data-ac-sw="switch.1e51bb2c_quiet">🔇 Quiet</button>
+          <button class="sbtn sbtn-b" style="flex:1;font-size:11px;" data-ac-sw="switch.1e51bb2c_fresh_air">🌬️ Fresh Air</button>
         </div>
       </div>
     </div>`
   },
 
   gr:{
-    ico:'🚪',bg:'rgba(16,185,129,.22)',name:'Guest Room',sub:'3 lights · IR AC via 9 scripts',
+    ico:'🚪',bg:'rgba(16,185,129,.22)',name:'Guest Room',sub:'Guest room lights & IR AC',
     html:`
     <div class="psec">💡 Guest Room Lights</div>
     <div class="pc">
       <div class="ctrl accent-g full">
         <div class="clbl">Guest Room Group Switch</div>
-        <div class="crow"><div><div class="cval">Off</div><div class="csub">All 3 switches</div></div><button class="tog off tog-g"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.guest_room_switches</div></div><button class="tog off tog-g" data-entity="switch.guest_room_switches"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Guest Light — Individual</div>
-        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-g"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off tog-g"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-g"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-g" data-entity="switch.guest_light_left"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Center</div></div><button class="tog off tog-g" data-entity="switch.guest_light_center"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off tog-g" data-entity="switch.guest_light_right"></button></div>
       </div>
     </div>
     <div class="psec">❄️ Guest Room AC — IR Script Control</div>
@@ -1131,24 +1125,24 @@ const ROOMS={
       <div class="ctrl accent-g full">
         <div class="clbl" style="margin-bottom:14px;">Power</div>
         <div class="script-grid cols2">
-          <button class="sbtn sbtn-g" style="padding:14px;font-size:14px;">▶️ GuestAC On</button>
-          <button class="sbtn sbtn-r" style="padding:14px;font-size:14px;">⏹ GuestAC Off</button>
+          <button class="sbtn sbtn-g" style="padding:14px;font-size:14px;" data-script="script.guestac_on">▶️ GuestAC On</button>
+          <button class="sbtn sbtn-r" style="padding:14px;font-size:14px;" data-script="script.guestac">⏹ GuestAC Off</button>
         </div>
       </div>
       <div class="ctrl accent-g full">
         <div class="clbl" style="margin-bottom:14px;">Set Temperature</div>
         <div class="script-grid cols3" style="margin-bottom:10px;">
-          <button class="sbtn sbtn-c" style="font-size:13px;">19°C</button>
-          <button class="sbtn sbtn-c" style="font-size:13px;">20°C</button>
-          <button class="sbtn sbtn-c" style="font-size:13px;">21°C</button>
-          <button class="sbtn sbtn-c" style="font-size:13px;">22°C</button>
-          <button class="sbtn sbtn-c" style="font-size:13px;">23°C</button>
+          <button class="sbtn sbtn-c" style="font-size:13px;" data-script="script.guesac_temp19">19°C</button>
+          <button class="sbtn sbtn-c" style="font-size:13px;" data-script="script.guesac_temp20">20°C</button>
+          <button class="sbtn sbtn-c" style="font-size:13px;" data-script="script.guesac_temp21">21°C</button>
+          <button class="sbtn sbtn-c" style="font-size:13px;" data-script="script.guesac_temp22">22°C</button>
+          <button class="sbtn sbtn-c" style="font-size:13px;" data-script="script.guesac_temp23">23°C</button>
           <div></div>
         </div>
         <div class="clbl" style="margin-top:10px;margin-bottom:10px;">Adjust</div>
         <div class="script-grid cols2">
-          <button class="sbtn sbtn-a">▲ Temp Up</button>
-          <button class="sbtn sbtn-a">▼ Temp Down</button>
+          <button class="sbtn sbtn-a" data-script="script.guestac_tempup">▲ Temp Up</button>
+          <button class="sbtn sbtn-a" data-script="script.guesac_tempdown">▼ Temp Down</button>
         </div>
       </div>
     </div>`
@@ -1161,88 +1155,105 @@ const ROOMS={
     <div class="pc">
       <div class="ctrl full">
         <div class="clbl">Hallway Group</div>
-        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.hallway_switches</div></div><button class="tog off" data-entity="switch.hallway_switches"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Entrance Lights</div>
-        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off" data-entity="switch.entrance_light_left"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off" data-entity="switch.entrance_light_right"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Between Rooms</div>
-        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off"></button></div>
-        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off" data-entity="switch.betweenroomslights_left"></button></div>
+        <div class="light-sw"><div><div class="lsw-name">Right</div></div><button class="tog off" data-entity="switch.betweenroomslights_right"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Corridor</div>
-        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.collidor</div></div><button class="tog off" data-entity="switch.collidor"></button></div>
       </div>
     </div>
     <div class="psec">🗄️ Storage</div>
     <div class="pc">
       <div class="ctrl">
         <div class="clbl">Storage Light</div>
-        <div class="crow"><div><div class="cval">Off</div><div class="csub">switch.storagelight</div></div><button class="tog off"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.storagelight</div></div><button class="tog off" data-entity="switch.storagelight"></button></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Storage Motion</div>
-        <div class="crow"><div><div class="cval" style="color:#4ade80">Clear</div><div class="csub">binary_sensor.storagemotionsensor_occupancy</div></div><span style="font-size:20px">✅</span></div>
+        <div class="crow"><div><div class="cval" id="hw-storage-motion">--</div><div class="csub">binary_sensor.storagemotionsensor_occupancy</div></div><span style="font-size:20px" id="hw-storage-icon">--</span></div>
       </div>
     </div>
     <div class="psec">🚦 Motion & Automations</div>
     <div class="pc">
       <div class="ctrl">
         <div class="clbl">Entrance Motion Sensor</div>
-        <div class="crow"><div><div class="cval" style="color:#4ade80">Clear</div><div class="csub">binary_sensor.entrance_motion_sensor_occupancy</div></div><span style="font-size:20px">✅</span></div>
+        <div class="crow"><div><div class="cval" id="hw-entrance-motion">--</div><div class="csub">binary_sensor.entrance_motion_sensor_occupancy</div></div><span style="font-size:20px" id="hw-entrance-icon">--</span></div>
       </div>
       <div class="ctrl">
         <div class="clbl">Corridor Auto Mode</div>
-        <div class="crow"><div><div class="cval">On</div><div class="csub">Motion-triggered</div></div><button class="tog on"></button></div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">input_boolean.collidor_manual</div></div><button class="tog off" data-entity="input_boolean.collidor_manual"></button></div>
       </div>
     </div>`
   },
 
   ln:{
-    ico:'🧺',bg:'rgba(248,113,113,.22)',name:'Laundry Room',sub:'Lights off · No AC',
+    ico:'🧺',bg:'rgba(248,113,113,.22)',name:'Laundry Room',sub:'Laundry lights & AC',
     html:`
     <div class="psec">💡 Laundry Lights</div>
     <div class="pc">
       <div class="ctrl accent-r full">
-        <div class="clbl">Laundry Light Left · switch.laundry_light_left</div>
-        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+        <div class="clbl">Laundry Light Left</div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.laundry_light_left</div></div><button class="tog off" data-entity="switch.laundry_light_left"></button></div>
       </div>
       <div class="ctrl accent-r full">
-        <div class="clbl">Laundry Light Right · switch.laundry_light_right</div>
-        <div class="crow"><div><div class="cval">Off</div></div><button class="tog off"></button></div>
+        <div class="clbl">Laundry Light Right</div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.laundry_light_right</div></div><button class="tog off" data-entity="switch.laundry_light_right"></button></div>
       </div>
     </div>
-    <div class="psec">💧 Appliances</div>
+    <div class="psec">❄️ Laundry AC</div>
     <div class="pc">
-      <div class="ctrl">
-        <div class="clbl">Washing Machine Power</div>
-        <div class="crow"><div><div class="cval">Off</div><div class="csub">Power monitoring</div></div><button class="tog off"></button></div>
+      <div class="ctrl accent-r full">
+        <div class="clbl">Laundry AC — Gree (climate.1e51bb2c)</div>
+        <div class="tempd"><span class="tbig" style="color:#f87171">--</span><span class="tunit">°C</span></div>
+        <div class="csub">Standby</div>
+        <input class="tslider" type="range" min="16" max="30" value="22" style="--c:#f87171" oninput="slup(this)" data-ac="climate.1e51bb2c">
+        <div class="scenes">
+          <button class="scene off">❄️ Cool</button>
+          <button class="scene off">💨 Fan</button>
+          <button class="scene off">🌡️ Heat</button>
+          <button class="scene off">⏹ Off</button>
+        </div>
       </div>
     </div>`
   },
 
-  'ac-lr':{ico:'❄️',bg:'rgba(56,189,248,.22)',name:'Living Room AC',sub:'Cooling 23°C · Fan Auto',html:`
+  'ac-lr':{ico:'❄️',bg:'rgba(56,189,248,.22)',name:'Living Room AC',sub:'Living Room AC',html:`
     <div class="pc" style="margin-top:20px;">
       <div class="ctrl accent-b full">
         <div class="clbl">Temperature</div>
-        <div class="tempd"><span class="tbig" style="color:#38bdf8">23</span><span class="tunit">°C</span></div>
-        <div class="csub">Set 23°C · Current 25°C · Feels 21°C</div>
-        <input class="tslider" type="range" min="16" max="30" value="23" oninput="slup(this)">
-        <div class="scenes"><button class="scene on">❄️ Cool</button><button class="scene off">💨 Fan</button><button class="scene off">🌡️ Heat</button><button class="scene off">Off</button></div>
+        <div class="tempd"><span class="tbig" style="color:#38bdf8">--</span><span class="tunit">°C</span></div>
+        <div class="csub">Standby</div>
+        <input class="tslider" type="range" min="16" max="30" value="23" oninput="slup(this)" data-ac="climate.1e05049f" style="--c:#38bdf8">
+        <div class="scenes"><button class="scene off">❄️ Cool</button><button class="scene off">💨 Fan</button><button class="scene off">🌡️ Heat</button><button class="scene off">Off</button></div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+          <button class="sbtn sbtn-b" style="flex:1;font-size:11px;" data-ac-sw="switch.1e05049f_quiet">🔇 Quiet</button>
+          <button class="sbtn sbtn-c" style="flex:1;font-size:11px;" data-ac-sw="switch.1e05049f_fresh_air">🌬️ Fresh Air</button>
+        </div>
       </div>
     </div>`
   },
-  'ac-bd':{ico:'❄️',bg:'rgba(167,139,250,.22)',name:'Bedroom AC',sub:'Cooling 22°C · Quiet',html:`
+  'ac-bd':{ico:'❄️',bg:'rgba(167,139,250,.22)',name:'Bedroom AC',sub:'Bedroom AC',html:`
     <div class="pc" style="margin-top:20px;">
       <div class="ctrl accent-p full">
         <div class="clbl">Temperature</div>
-        <div class="tempd"><span class="tbig" style="color:#a78bfa">22</span><span class="tunit">°C</span></div>
-        <input class="tslider" type="range" min="16" max="30" value="22" oninput="slup(this)">
-        <div class="scenes"><button class="scene on">❄️ Cool</button><button class="scene off">💨 Fan</button><button class="scene off">Off</button></div>
+        <div class="tempd"><span class="tbig" style="color:#a78bfa">--</span><span class="tunit">°C</span></div>
+        <div class="csub">Standby</div>
+        <input class="tslider" type="range" min="16" max="30" value="22" oninput="slup(this)" style="--c:#a78bfa" data-ac="climate.1e050116">
+        <div class="scenes"><button class="scene off">❄️ Cool</button><button class="scene off">💨 Fan</button><button class="scene off">🌡️ Heat</button><button class="scene off">Off</button></div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="sbtn sbtn-p" style="flex:1;font-size:11px;" data-ac-sw="switch.1e050116_quiet">🔇 Quiet</button>
+          <button class="sbtn sbtn-b" style="flex:1;font-size:11px;" data-ac-sw="switch.1e050116_fresh_air">🌬️ Fresh Air</button>
+        </div>
       </div>
     </div>`
   },

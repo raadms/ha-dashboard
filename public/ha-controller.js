@@ -400,3 +400,152 @@ function updateMedia(s, entity, selector, label) {
 
 // Override toggleRadio to call HA
 window.toggleRadio = () => callHA('input_boolean','toggle','input_boolean.radio_automation');
+
+// ── Popup HA binding ─────────────────────────────────────────────────────────
+
+function bindPopupControls() {
+  const pc = document.getElementById('pcontent');
+  if (!pc) return;
+
+  // 1. Toggle buttons with data-entity → call haToggle (or climate on/off)
+  pc.querySelectorAll('.tog[data-entity]').forEach(tog => {
+    const entity = tog.dataset.entity;
+    const domain = entity.split('.')[0];
+    const st = getState(entity);
+    if (st) {
+      const isOn = st.state !== 'off' && st.state !== 'unavailable' && st.state !== 'unknown';
+      tog.classList.toggle('on', isOn);
+      tog.classList.toggle('off', !isOn);
+      const crow = tog.closest('.crow');
+      if (crow) {
+        const cval = crow.querySelector('.cval');
+        if (cval && cval.textContent === '--') cval.textContent = isOn ? 'On' : 'Off';
+      }
+    }
+    tog.onclick = (e) => {
+      e.stopPropagation();
+      if (domain === 'climate') {
+        const cur = getState(entity)?.state;
+        window.haClimateMode(entity, cur === 'off' ? 'cool' : 'off');
+      } else if (domain === 'automation') {
+        callHA('automation', 'toggle', entity);
+      } else {
+        window.haToggle(entity);
+      }
+    };
+  });
+
+  // 2. Also bind .crow .tog buttons where .csub already has the entity ID
+  pc.querySelectorAll('.crow').forEach(row => {
+    const csub = row.querySelector('.csub');
+    const tog  = row.querySelector('.tog');
+    if (!csub || !tog || tog.dataset.entity) return;
+    const txt = csub.textContent.trim();
+    if (!/^[a-z_]+\.[a-z0-9_]+$/.test(txt)) return;
+    const entity = txt;
+    const st = getState(entity);
+    if (st) {
+      const isOn = st.state !== 'off' && st.state !== 'unavailable' && st.state !== 'unknown';
+      tog.classList.toggle('on', isOn);
+      tog.classList.toggle('off', !isOn);
+      const cval = row.querySelector('.cval');
+      if (cval && cval.textContent === '--') cval.textContent = isOn ? 'On' : 'Off';
+    }
+    tog.onclick = (e) => { e.stopPropagation(); window.haToggle(entity); };
+  });
+
+  // 3. Script buttons with data-script attribute
+  pc.querySelectorAll('[data-script]').forEach(btn => {
+    const sid = btn.dataset.script;
+    btn.onclick = () => window.haScript(sid);
+  });
+
+  // 4. AC switches (quiet, fresh air) with data-ac-sw attribute
+  pc.querySelectorAll('[data-ac-sw]').forEach(btn => {
+    const entity = btn.dataset.acSw;
+    const st = getState(entity);
+    if (st) {
+      const isOn = st.state === 'on';
+      if (isOn) btn.style.opacity = '1';
+    }
+    btn.onclick = () => window.haToggle(entity);
+  });
+
+  // 5. AC temperature sliders with data-ac attribute
+  pc.querySelectorAll('.tslider[data-ac]').forEach(slider => {
+    const entity = slider.dataset.ac;
+    const st = getState(entity);
+    const tbig = slider.closest('.ctrl')?.querySelector('.tbig');
+    const csub = slider.closest('.ctrl')?.querySelector('.csub');
+    if (st) {
+      const setTemp = st.attributes?.temperature;
+      const curTemp = st.attributes?.current_temperature;
+      if (setTemp) {
+        slider.value = setTemp;
+        if (tbig) tbig.textContent = setTemp;
+      }
+      if (csub && csub.textContent === 'Standby') {
+        const mode = st.state;
+        if (mode !== 'off') {
+          csub.textContent = `Set ${setTemp}°C · Current ${curTemp ?? '--'}°C · ${mode}`;
+        }
+      }
+      // Update AC mode scenes
+      const scenes = slider.closest('.ctrl')?.querySelector('.scenes');
+      if (scenes) _updateAcScenes(scenes, entity, st.state);
+    }
+    slider.removeEventListener('change', slider._acChange);
+    slider._acChange = () => window.haClimateTemp(entity, parseInt(slider.value));
+    slider.addEventListener('change', slider._acChange);
+  });
+
+  // 6. AC mode scene buttons next to data-ac slider
+  pc.querySelectorAll('.ctrl').forEach(ctrl => {
+    const slider = ctrl.querySelector('.tslider[data-ac]');
+    if (!slider) return;
+    const entity = slider.dataset.ac;
+    const scenes = ctrl.querySelector('.scenes');
+    if (!scenes) return;
+    const modeMap = { '❄️ Cool':'cool', '💨 Fan':'fan_only', '🌡️ Heat':'heat', 'Off':'off', '⏹ Off':'off' };
+    scenes.querySelectorAll('.scene').forEach(btn => {
+      const mode = modeMap[btn.textContent.trim()];
+      if (!mode) return;
+      btn.onclick = () => {
+        window.haClimateMode(entity, mode);
+        _updateAcScenes(scenes, entity, mode);
+      };
+    });
+  });
+
+  // 7. Binary sensor status in popups
+  pc.querySelectorAll('.crow').forEach(row => {
+    const csub = row.querySelector('.csub');
+    if (!csub) return;
+    const txt = csub.textContent.trim();
+    if (!txt.startsWith('binary_sensor.')) return;
+    const st = getState(txt);
+    if (!st) return;
+    const cval = row.querySelector('.cval');
+    const icon = row.querySelector('span[style*="font-size"]');
+    const isOn = st.state === 'on';
+    if (cval) { cval.textContent = isOn ? 'Active' : 'Clear'; cval.style.color = isOn ? '#f87171' : '#4ade80'; }
+    if (icon) icon.textContent = isOn ? '🔴' : '✅';
+  });
+}
+
+function _updateAcScenes(scenes, entity, mode) {
+  const modeMap = { cool:'❄️ Cool', fan_only:'💨 Fan', heat:'🌡️ Heat', off:'Off' };
+  const activeLabel = modeMap[mode] ?? 'Off';
+  scenes.querySelectorAll('.scene').forEach(s => {
+    const txt = s.textContent.trim();
+    const isActive = txt === activeLabel || (mode === 'off' && (txt === 'Off' || txt === '⏹ Off'));
+    s.classList.toggle('on', isActive);
+    s.classList.toggle('off', !isActive);
+  });
+}
+
+// Override pop() to run HA bindings after popup content is loaded
+const _origPop = window.pop;
+if (typeof _origPop === 'function') {
+  window.pop = (id) => { _origPop(id); bindPopupControls(); };
+}
