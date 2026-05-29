@@ -32,20 +32,28 @@ function bindButtons() {
     'r-hall':   { light:'switch.hallway_switches' },
     'r-laundry':{ light:'switch.laundry_light_left',   ac:'climate.1e51bb2c' },
   };
+  const _btnColorMap = { 'r-living':'rbtn-b','r-bed':'rbtn-p','r-kit':'rbtn-a','r-office':'rbtn-c','r-baby':'rbtn-r','r-guest':'rbtn-g','r-hall':'rbtn-b','r-laundry':'rbtn-r' };
   document.querySelectorAll('.room').forEach(room => {
     const cls = [...room.classList].find(c => roomMap[c]);
     if (!cls) return;
     const map = roomMap[cls];
+    const colorCls = _btnColorMap[cls] ?? 'rbtn-b';
     const btns = room.querySelectorAll('.rbtn');
     btns.forEach(btn => {
-      const txt = btn.textContent;
       btn.onclick = (e) => {
         e.stopPropagation();
-        if (txt.includes('💡') && map.light)  window.haToggle(map.light);
-        if (txt.includes('❄️') && map.ac)     window.haToggle(map.ac);
-        if (txt.includes('❄️') && map.acOn)   window.haScript(map.acOn);
-        if (txt.includes('📺'))               window.haToggle('media_player.lg_webos_tv_uj670v');
-        if (txt.includes('🌙') && map.light)  window.haToggle(map.light);
+        const cur = btn.textContent;
+        if (cur.includes('💡') && map.light) {
+          const goingOn = cur.includes('Off');
+          window.haToggle(map.light);
+          btn.textContent = goingOn ? '💡 On' : '💡 Off';
+          btn.className = `rbtn ${goingOn ? colorCls : 'rbtn-off'}`;
+          if (goingOn) room.classList.remove('r-off');
+        }
+        if (cur.includes('❄️') && map.ac)    window.haToggle(map.ac);
+        if (cur.includes('❄️') && map.acOn)  window.haScript(map.acOn);
+        if (cur.includes('📺'))              window.haToggle('media_player.lg_webos_tv_uj670v');
+        if (cur.includes('🌙') && map.light) window.haToggle(map.light);
       };
     });
   });
@@ -408,9 +416,10 @@ function updateRoom(s, roomCls, lightEntities, acEntity) {
     if (acEntity) {
       const acMode = acState?.state;
       const acModeIcon = { cool:'❄️', heat:'🌡️', fan_only:'💨', dry:'💧' }[acMode ?? ''] ?? '❄️';
-      badges.querySelectorAll('.rb-ac').forEach(b => {
-        if (acOn && acTemp) {
-          b.textContent = `${acModeIcon} ${acTemp}°`;
+      // Use data-badge="ac" — stable across class changes (rb-ac ↔ rb-off)
+      badges.querySelectorAll('[data-badge="ac"]').forEach(b => {
+        if (acOn) {
+          b.textContent = `${acModeIcon} ${acTemp ?? '--'}°`;
           b.className = 'rb rb-ac';
         } else {
           b.textContent = '❄️ Off';
@@ -420,12 +429,16 @@ function updateRoom(s, roomCls, lightEntities, acEntity) {
     }
   }
 
-  // Update button labels
+  // Update button labels + classes
+  const _colorMap = { 'r-living':'rbtn-b','r-bed':'rbtn-p','r-kit':'rbtn-a','r-office':'rbtn-c','r-baby':'rbtn-r','r-guest':'rbtn-g','r-hall':'rbtn-b','r-laundry':'rbtn-r' };
+  const _colorCls = _colorMap[roomCls] ?? 'rbtn-b';
   room.querySelectorAll('.rbtn').forEach(btn => {
-    if (btn.textContent.includes('💡'))
+    if (btn.textContent.includes('💡')) {
       btn.textContent = lightsOn ? '💡 On' : '💡 Off';
-    if (btn.textContent.includes('❄️') && acTemp)
-      btn.textContent = acOn ? `❄️ ${acTemp}°` : '❄️ Off';
+      btn.className = `rbtn ${lightsOn ? _colorCls : 'rbtn-off'}`;
+    }
+    if (btn.textContent.includes('❄️'))
+      btn.textContent = acEntity ? (acOn ? `❄️ ${acTemp ?? '--'}°` : '❄️ Off') : btn.textContent;
   });
 }
 
