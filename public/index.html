@@ -566,24 +566,23 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 
   </div><!-- /rooms -->
 
-  <div class="sh"><h2>Now Playing</h2></div>
-  <div class="mrow">
+  <div class="sh" id="now-playing-sh"><h2>Now Playing</h2></div>
+  <div class="mrow" id="now-playing-row">
     <div class="mc mc-tv"><div class="mlbl">LG TV · Living Room</div><div class="mtit">Netflix — Playing</div><div class="msub">Vol 55% · On</div>
       <div class="mctr"><button class="mcc">⏮</button><button class="mcc play">⏸</button><button class="mcc">⏭</button><div class="vol"><div class="volf"></div></div><button class="mcc">🔇</button></div>
     </div>
     <div class="mc mc-atv"><div class="mlbl">Apple TV</div><div class="mtit">Paused</div><div class="msub">Tap for remote</div>
       <div class="mctr"><button class="mcc">⏯</button><button class="mcc">⏹</button></div>
     </div>
-    <div class="mc mc-hp" id="radio-card">
-      <div class="mlbl">HomePod Mini · 📻 Radio</div>
-      <div class="mtit" id="radio-title">📻 Radio — Off</div>
-      <div class="msub" id="radio-sub">input_boolean.radio_automation</div>
-      <div class="mctr" style="margin-top:12px;align-items:center;gap:12px;">
-        <span style="font-size:12px;color:var(--muted);font-weight:600;">OFF</span>
-        <button class="tog off" id="radio-tog" style="flex-shrink:0;" onclick="toggleRadio()"></button>
-        <span style="font-size:12px;color:var(--muted);font-weight:600;">ON</span>
-        <div style="flex:1"></div>
-        <button class="mcc">⏯</button>
+    <div class="mc mc-hp" id="homepod-card">
+      <div class="mlbl">🍎 HomePod Mini</div>
+      <div class="mtit" id="homepod-title">Idle</div>
+      <div class="msub" id="homepod-sub">—</div>
+      <div class="mctr">
+        <button class="mcc">⏮</button>
+        <button class="mcc play">⏸</button>
+        <button class="mcc">⏭</button>
+        <div class="vol"><div class="volf"></div></div>
         <button class="mcc">🔇</button>
       </div>
     </div>
@@ -1286,8 +1285,8 @@ function initWidgets(){
       };
     });
   });
-  // Toggles
-  document.querySelectorAll('.tog').forEach(t=>{
+  // Toggles — scope to popup content only so radio-tog2 (TV page) isn't clobbered
+  document.querySelectorAll('#pcontent .tog').forEach(t=>{
     t.onclick=function(){
       this.classList.toggle('on');this.classList.toggle('off');
     };
@@ -1306,52 +1305,8 @@ let sy=0;
 document.getElementById('popup').addEventListener('touchstart',e=>{sy=e.touches[0].clientY;});
 document.getElementById('popup').addEventListener('touchmove',e=>{if(e.touches[0].clientY-sy>70)closeP();});
 
-// ── Radio toggle (input_boolean.radio_automation) ──
-let radioOn = false; // reflects HA state: currently off
-function toggleRadio(){
-  radioOn = !radioOn;
-  // Main media card
-  const tog1 = document.getElementById('radio-tog');
-  const title = document.getElementById('radio-title');
-  const sub   = document.getElementById('radio-sub');
-  const card  = document.getElementById('radio-card');
-  // TV page
-  const tog2  = document.getElementById('radio-tog2');
-  const tvtit = document.getElementById('radio-tv-title');
-  const tvsub = document.getElementById('radio-tv-sub');
-  const tvbox = document.getElementById('radio-tvbox');
-  // App strip
-  const appico = document.getElementById('radio-app-ico');
-  const applbl = document.getElementById('radio-app-lbl');
-  const appdot = document.getElementById('radio-app-dot');
-  const appel  = document.getElementById('radio-app');
-
-  if(radioOn){
-    [tog1,tog2].forEach(t=>{if(t){t.classList.add('on');t.classList.remove('off');}});
-    if(title) title.textContent='📻 Radio — On · Playing';
-    if(sub)   sub.style.color='#4ade80';
-    if(card)  card.style.borderColor='rgba(16,185,129,.4)';
-    if(tvtit) tvtit.textContent='Radio — On · Playing';
-    if(tvsub) tvsub.style.color='#4ade80';
-    if(tvbox) tvbox.style.borderColor='rgba(16,185,129,.4)';
-    // radio SVG icon stays the same, dot and label show state
-    if(applbl)applbl.textContent='Radio On';
-    if(appdot){appdot.style.background='#4ade80';appdot.style.boxShadow='0 0 6px rgba(74,222,128,.6)';}
-    if(appel) appel.style.borderColor='rgba(16,185,129,.5)';
-  } else {
-    [tog1,tog2].forEach(t=>{if(t){t.classList.remove('on');t.classList.add('off');}});
-    if(title) title.textContent='📻 Radio — Off';
-    if(sub)   sub.style.color='';
-    if(card)  card.style.borderColor='';
-    if(tvtit) tvtit.textContent='Radio — Off';
-    if(tvsub) tvsub.style.color='';
-    if(tvbox) tvbox.style.borderColor='';
-    // radio SVG icon stays the same, dot and label show state
-    if(applbl)applbl.textContent='Radio Off';
-    if(appdot){appdot.style.background='#6b7280';appdot.style.boxShadow='none';}
-    if(appel) appel.style.borderColor='';
-  }
-}
+// ── Radio toggle — replaced at runtime by ha-controller.js (window.toggleRadio) ──
+function toggleRadio(){}
 
 // ── Battery notification dismiss ──
 function dismissNotif(id){

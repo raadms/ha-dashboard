@@ -10,7 +10,7 @@ window.haClimateMode = (e,m)=> callHA('climate','set_hvac_mode',   e, {hvac_mode
 window.haScript      = (e)  => callHA('script','turn_on', e);
 window.haInputBtn    = (e)  => callHA('input_button','press', e);
 window.haBoolToggle  = (e)  => callHA('input_boolean','toggle', e);
-window.haAlarm       = (a, code='') => callHA('alarm_control_panel', a, 'alarm_control_panel.alarmo', {code});
+window.haAlarm       = (a, code) => callHA('alarm_control_panel', a, 'alarm_control_panel.alarmo', code ? {code} : {});
 window.haMediaCmd    = (e,a,x={}) => callHA('media_player', a, e, x);
 
 // ── Connect ──
@@ -136,6 +136,7 @@ function bindButtons() {
   // Media player controls
   bindMediaControls('media_player.lg_webos_tv_uj670v',  '.mc-tv');
   bindMediaControls('media_player.appletv',              '.mc-atv');
+  bindMediaControls('media_player.homepod_mini',         '#homepod-card');
 }
 
 function bindMediaControls(entity, selector) {
@@ -233,8 +234,13 @@ document.addEventListener('ha-states-updated', (ev) => {
       if (ico) ico.textContent = lightsOn > 0 ? '💡' : '🔦';
     }
   });
-  const lrAcTemp = s['climate.1e05049f']?.attributes?.current_temperature;
-  if (lrAcTemp) document.querySelectorAll('.sv')[1].textContent = `${lrAcTemp}°C`;
+  const _acEntities = ['climate.1e05049f','climate.1e050116','climate.1e51b62f','climate.1e51bb2c'];
+  const _activeAcs = _acEntities.filter(e => s[e]?.state && s[e].state !== 'off').length;
+  const _lrAcTemp = s['climate.1e05049f']?.attributes?.current_temperature;
+  const _acSv = document.querySelectorAll('.sv')[1];
+  const _acSl = document.querySelectorAll('.sl')[1];
+  if (_acSv) _acSv.textContent = _activeAcs === 0 ? 'All Off' : (_lrAcTemp ? `${_lrAcTemp}°C` : `${_activeAcs} Active`);
+  if (_acSl) _acSl.textContent = _activeAcs === 0 ? 'All ACs Off' : `${_activeAcs} AC${_activeAcs > 1 ? 's' : ''} Active`;
   document.querySelectorAll('.sv')[2].textContent = raed ? 'Raed' : 'Away';
   const waterFilter = s['switch.athom_smart_plug_v3_50b5b0_power']?.state === 'on';
   if (document.querySelectorAll('.sv')[3])
@@ -313,6 +319,16 @@ document.addEventListener('ha-states-updated', (ev) => {
   // ── Media player ──
   updateMedia(s,'media_player.lg_webos_tv_uj670v','.mc-tv','LG TV · Living Room');
   updateMedia(s,'media_player.appletv','.mc-atv','Apple TV');
+  updateMedia(s,'media_player.homepod_mini','#homepod-card','🍎 HomePod Mini');
+
+  // Hide Now Playing section when all cards are off
+  const _anyMedia = ['.mc-tv','.mc-atv','#homepod-card'].some(sel => {
+    const c = document.querySelector(sel); return c && c.style.display !== 'none';
+  });
+  const _npSh = document.getElementById('now-playing-sh');
+  const _npRow = document.getElementById('now-playing-row');
+  if (_npSh) _npSh.style.display = _anyMedia ? '' : 'none';
+  if (_npRow) _npRow.style.display = _anyMedia ? '' : 'none';
 
   // ── Radio ──
   const radio = s['input_boolean.radio_automation']?.state === 'on';
@@ -426,22 +442,22 @@ function _battIcon(entityId, name) {
 }
 
 function syncRadio(isOn) {
-  ['radio-tog','radio-tog2'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.classList.toggle('on', isOn);
-    el.classList.toggle('off', !isOn);
-  });
+  // radio-tog2 lives on the TV page
+  const tog2 = document.getElementById('radio-tog2');
+  if (tog2) { tog2.classList.toggle('on', isOn); tog2.classList.toggle('off', !isOn); }
+
   const map = {
-    'radio-title': isOn ? '📻 Radio — On'  : '📻 Radio — Off',
-    'radio-tv-title': isOn ? 'Radio — On'  : 'Radio — Off',
-    'radio-app-lbl': isOn ? 'Radio On'     : 'Radio Off',
+    'radio-tv-title': isOn ? 'Radio — On' : 'Radio — Off',
+    'radio-app-lbl':  isOn ? 'Radio On'   : 'Radio Off',
   };
   for (const [id, txt] of Object.entries(map)) {
     const el = document.getElementById(id); if (el) el.textContent = txt;
   }
   const dot = document.getElementById('radio-app-dot');
   if (dot) dot.style.background = isOn ? '#4ade80' : '#6b7280';
+  // Dim the radio app icon when off
+  const ico = document.getElementById('radio-app-ico');
+  if (ico) ico.style.opacity = isOn ? '1' : '0.4';
 }
 
 function updateRoom(s, roomCls, lightEntities, acEntity) {
@@ -520,9 +536,10 @@ function updateMedia(s, entity, selector, label) {
   const card = document.querySelector(selector);
   if (!card) return;
   const st = s[entity];
-  if (!st) return;
+  const isOff = !st || st.state === 'off' || st.state === 'unavailable' || st.state === 'standby';
+  card.style.display = isOff ? 'none' : '';
+  if (isOff) return;
   const playing = st.state === 'playing';
-  const paused  = st.state === 'paused';
   const titleEl = card.querySelector('.mtit');
   const subEl   = card.querySelector('.msub');
   const playBtn = card.querySelector('.mcc.play');
