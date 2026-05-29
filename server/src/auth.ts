@@ -14,18 +14,20 @@ export async function validatePassword(password: string): Promise<boolean> {
   return bcrypt.compare(password, config.passwordHash);
 }
 
-const DURATION_MAP: Record<string, string> = {
+const DURATION_MAP = {
   '5m':    '5m',
   '1h':    '1h',
   '24h':   '1d',
   '7d':    '7d',
   '30d':   '30d',
   'never': '3650d',
-};
+} as const;
+
+type DurationKey = keyof typeof DURATION_MAP;
 
 export function signToken(duration = '30d'): string {
-  const expiry = DURATION_MAP[duration] ?? '30d';
-  return jwt.sign({ auth: true }, JWT_SECRET, { expiresIn: expiry });
+  const key: DurationKey = (duration in DURATION_MAP ? duration : '30d') as DurationKey;
+  return jwt.sign({ auth: true }, JWT_SECRET, { expiresIn: DURATION_MAP[key] });
 }
 
 export function verifyToken(token: string): boolean {
