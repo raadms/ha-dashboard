@@ -155,6 +155,47 @@ function bindMediaControls(entity, selector) {
 document.addEventListener('ha-states-updated', (ev) => {
   const s = ev.detail;
 
+  // ── Greeting sub-text ──
+  const _roomDefs = [
+    { name:'Living Room', lights:['switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509'], ac:'climate.1e05049f' },
+    { name:'Bedroom',     lights:['switch.masterroom_group_switch'], ac:'climate.1e050116' },
+    { name:'Kitchen',     lights:['switch.kitchen_group_switch','light.wled_2'] },
+    { name:'Office',      lights:['switch.office_group_swithces'], ac:'climate.1e51b62f' },
+    { name:'Baby Room',   lights:['switch.baby_room'] },
+    { name:'Guest Room',  lights:['switch.guest_room_switches'] },
+    { name:'Hallway',     lights:['switch.hallway_switches'] },
+    { name:'Laundry',     lights:['switch.laundry_light_left'], ac:'climate.1e51bb2c' },
+  ];
+  const _active = _roomDefs.filter(r => {
+    const lit = r.lights?.some(e => s[e]?.state === 'on');
+    const cool = r.ac ? ['cool','heat','fan_only'].includes(s[r.ac]?.state) : false;
+    return lit || cool;
+  });
+  const _day = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()];
+  const _gSub = document.getElementById('greet-sub');
+  if (_gSub) {
+    if (!_active.length) {
+      _gSub.textContent = `${_day} · All rooms off`;
+    } else {
+      const _names = _active.slice(0,3).map(r => r.name).join(', ');
+      _gSub.textContent = `${_day} · ${_active.length} room${_active.length>1?'s':''} active · ${_names}${_active.length>3?` +${_active.length-3} more`:''}`;
+    }
+  }
+
+  // ── Sync popup toggles if popup is open (fixes stale initial state) ──
+  if (document.getElementById('popup')?.classList.contains('open')) {
+    document.getElementById('pcontent')?.querySelectorAll('.tog[data-entity]').forEach(tog => {
+      const ent = tog.dataset.entity;
+      const tst = s[ent];
+      if (!tst) return;
+      const ton = tst.state !== 'off' && tst.state !== 'unavailable' && tst.state !== 'unknown';
+      tog.classList.toggle('on', ton);
+      tog.classList.toggle('off', !ton);
+      const crow = tog.closest('.crow');
+      if (crow) { const cv = crow.querySelector('.cval'); if (cv) cv.textContent = ton ? 'On' : 'Off'; }
+    });
+  }
+
   // ── Chips ──
   const raed = s['person.raed']?.state === 'home';
   const rola = s['person.rola']?.state === 'home';
@@ -586,9 +627,11 @@ function bindPopupControls() {
         slider.value = setTemp;
         if (tbig) tbig.textContent = setTemp;
       }
-      if (csub && csub.textContent === 'Standby') {
+      if (csub) {
         const mode = st.state;
-        if (mode !== 'off') {
+        if (mode === 'off') {
+          csub.textContent = 'Off';
+        } else {
           csub.textContent = `Set ${setTemp}°C · Current ${curTemp ?? '--'}°C · ${mode}`;
         }
       }

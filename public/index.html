@@ -112,7 +112,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 .r-guest  {background:linear-gradient(148deg,rgba(5,80,55,.85),rgba(3,40,28,.9));border-color:rgba(16,185,129,.4);box-shadow:0 4px 28px rgba(16,185,129,.12);}
 .r-hall   {background:linear-gradient(148deg,rgba(30,30,55,.75),rgba(15,15,30,.9));border-color:rgba(148,163,184,.3);}
 .r-laundry{background:linear-gradient(148deg,rgba(90,20,20,.75),rgba(45,8,8,.9));border-color:rgba(248,113,113,.35);box-shadow:0 4px 28px rgba(248,113,113,.10);}
-.r-off    {filter:saturate(0.15) brightness(0.48);border-color:rgba(255,255,255,.07) !important;}
+.r-off    {}
 
 .glow{position:absolute;top:-50%;right:-20%;width:140px;height:140px;border-radius:50%;pointer-events:none;}
 .r-living .glow{background:radial-gradient(circle,rgba(91,141,238,.40),transparent);}
@@ -457,7 +457,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 <!-- ══ GREETING ══ -->
 <div id="greet">
   <h1>Good Evening, Raed 👋</h1>
-  <p>Saturday · 3 rooms active · Living Room & Bedroom AC cooling</p>
+  <p id="greet-sub">Loading...</p>
 </div>
 
 <div id="main">
@@ -863,10 +863,6 @@ const ROOMS={
     html:`
     <div class="psec">💡 Lighting</div>
     <div class="pc">
-      <div class="ctrl accent-b full">
-        <div class="clbl">Main Group — All Lights</div>
-        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.livingroomswitchgroup</div></div><button class="tog off" data-entity="switch.livingroomswitchgroup"></button></div>
-      </div>
       <div class="ctrl">
         <div class="clbl">Switch 1</div>
         <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off" data-entity="switch.livingroomswitch1_left"></button></div>
@@ -941,10 +937,6 @@ const ROOMS={
     html:`
     <div class="psec">💡 Bedroom Lights</div>
     <div class="pc">
-      <div class="ctrl accent-p full">
-        <div class="clbl">Master Room Group</div>
-        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.masterroom_group_switch</div></div><button class="tog off tog-p" data-entity="switch.masterroom_group_switch"></button></div>
-      </div>
       <div class="ctrl">
         <div class="clbl">Master Lights 1</div>
         <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-p" data-entity="switch.master_lights1_left"></button></div>
@@ -997,10 +989,6 @@ const ROOMS={
     html:`
     <div class="psec">💡 Kitchen Lights</div>
     <div class="pc">
-      <div class="ctrl accent-a full">
-        <div class="clbl">Kitchen Group Switch</div>
-        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.kitchen_group_switch</div></div><button class="tog off" data-entity="switch.kitchen_group_switch"></button></div>
-      </div>
       <div class="ctrl">
         <div class="clbl">KitchenLights Left</div>
         <div class="crow"><div><div class="cval">--</div><div class="csub">switch.kitchenlights_left</div></div><button class="tog off" data-entity="switch.kitchenlights_left"></button></div>
@@ -1043,10 +1031,6 @@ const ROOMS={
     html:`
     <div class="psec">💡 Office Lights</div>
     <div class="pc">
-      <div class="ctrl accent-c full">
-        <div class="clbl">Office Group</div>
-        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.office_group_swithces</div></div><button class="tog off tog-c" data-entity="switch.office_group_swithces"></button></div>
-      </div>
       <div class="ctrl">
         <div class="clbl">Office Light Switch</div>
         <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-c" data-entity="switch.office_light_left"></button></div>
@@ -1115,10 +1099,6 @@ const ROOMS={
     html:`
     <div class="psec">💡 Guest Room Lights</div>
     <div class="pc">
-      <div class="ctrl accent-g full">
-        <div class="clbl">Guest Room Group Switch</div>
-        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.guest_room_switches</div></div><button class="tog off tog-g" data-entity="switch.guest_room_switches"></button></div>
-      </div>
       <div class="ctrl">
         <div class="clbl">Guest Light — Individual</div>
         <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off tog-g" data-entity="switch.guest_light_left"></button></div>
@@ -1159,10 +1139,6 @@ const ROOMS={
     html:`
     <div class="psec">💡 Hallway Lights</div>
     <div class="pc">
-      <div class="ctrl full">
-        <div class="clbl">Hallway Group</div>
-        <div class="crow"><div><div class="cval">--</div><div class="csub">switch.hallway_switches</div></div><button class="tog off" data-entity="switch.hallway_switches"></button></div>
-      </div>
       <div class="ctrl">
         <div class="clbl">Entrance Lights</div>
         <div class="light-sw"><div><div class="lsw-name">Left</div></div><button class="tog off" data-entity="switch.entrance_light_left"></button></div>
