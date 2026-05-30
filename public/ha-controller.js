@@ -19,7 +19,13 @@ const _mediaPauseTimers = new Map();
 const _token = sessionStorage.getItem('ha_dash_token');
 if (!_token) { window.location.href = '/login'; }
 
+function _getTokenPayload() {
+  try { return JSON.parse(atob(_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); } catch { return null; }
+}
+const _tokenPayload = _getTokenPayload();
+
 let _layout = null;
+let _editMode = false;
 
 async function boot() {
   try {
@@ -28,30 +34,61 @@ async function boot() {
     _layout = await r.json();
     window.__layout = _layout;
     applyLayout(_layout);
-    _maybeShowAdminChip();
+    _addUserChip();
+    if (_tokenPayload?.role === 'admin') _addAdminChips();
   } catch (e) {
     console.error('[ha-controller] Could not load layout:', e);
-    _layout = null; // will use fallback statics
+    _layout = null;
   }
   connect();
 }
 
-function _maybeShowAdminChip() {
-  try {
-    const payload = JSON.parse(atob(_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-    if (payload.role !== 'admin') return;
-  } catch { return; }
+function _addUserChip() {
   const chips = document.getElementById('chips');
   if (!chips) return;
-  const chip = document.createElement('a');
-  chip.href = '/admin';
-  chip.className = 'chip';
-  chip.style.cssText = 'border-color:rgba(91,141,238,.35);color:#93c5fd;text-decoration:none';
-  chip.title = 'Admin Panel';
-  chip.textContent = '⚙️ Admin';
+  const name = _tokenPayload?.name || 'User';
+  const initial = name[0].toUpperCase();
+  const wrap = document.createElement('div');
+  wrap.className = 'chip chip-user-menu';
+  wrap.style.cssText = 'cursor:pointer;gap:6px;border-color:rgba(255,255,255,.15);position:relative;';
+  wrap.innerHTML = `<span style="width:18px;height:18px;border-radius:50%;background:rgba(91,141,238,.3);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${initial}</span>${name}`;
+  const menu = document.createElement('div');
+  menu.style.cssText = 'position:absolute;top:calc(100% + 6px);right:0;background:#1e293b;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:6px;min-width:120px;z-index:200;display:none;box-shadow:0 8px 24px rgba(0,0,0,.5)';
+  menu.innerHTML = `<div style="padding:6px 10px;font-size:11px;color:#64748b;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px">${name}</div>
+    <div class="user-menu-item" onclick="sessionStorage.removeItem('ha_dash_token');location.href='/login'" style="padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:#f1f5f9">🚪 Sign Out</div>`;
+  menu.querySelectorAll('.user-menu-item').forEach(it => {
+    it.addEventListener('mouseenter', () => it.style.background = 'rgba(255,255,255,.08)');
+    it.addEventListener('mouseleave', () => it.style.background = '');
+  });
+  wrap.appendChild(menu);
+  wrap.addEventListener('click', e => { e.stopPropagation(); menu.style.display = menu.style.display === 'none' ? 'block' : 'none'; });
+  document.addEventListener('click', () => { menu.style.display = 'none'; });
+  const clock = document.getElementById('clk');
+  if (clock) chips.insertBefore(wrap, clock);
+  else chips.appendChild(wrap);
+}
+
+function _addAdminChips() {
+  const chips = document.getElementById('chips');
+  if (!chips) return;
+  // Admin panel link
+  const adminChip = document.createElement('a');
+  adminChip.href = '/admin';
+  adminChip.className = 'chip';
+  adminChip.style.cssText = 'border-color:rgba(91,141,238,.35);color:#93c5fd;text-decoration:none';
+  adminChip.textContent = '⚙️ Admin';
+  // Edit mode toggle
+  const editChip = document.createElement('div');
+  editChip.id = 'edit-chip';
+  editChip.className = 'chip';
+  editChip.style.cssText = 'cursor:pointer;border-color:rgba(251,191,36,.25);color:#fde68a';
+  editChip.textContent = '✏️ Edit Layout';
+  editChip.addEventListener('click', toggleEditMode);
   const spacer = chips.querySelector('.chip-spacer');
-  if (spacer) chips.insertBefore(chip, spacer);
-  else chips.appendChild(chip);
+  [adminChip, editChip].forEach(el => {
+    if (spacer) chips.insertBefore(el, spacer);
+    else chips.appendChild(el);
+  });
 }
 
 // ── Apply layout to DOM ────────────────────────────────────────────────────
@@ -63,6 +100,13 @@ function applyLayout(L) {
   renderCameras(L.security?.cameras ?? []);
   applyTabVisibility(L.tabs);
   updateRadioToggle();
+  // Update greeting with actual user name
+  const h1 = document.querySelector('#greet h1');
+  if (h1 && _tokenPayload?.name) {
+    const hr = new Date().getHours();
+    const salut = hr < 12 ? 'Good Morning' : hr < 17 ? 'Good Afternoon' : 'Good Evening';
+    h1.textContent = `${salut}, ${_tokenPayload.name} 👋`;
+  }
 }
 
 function applyGridCols(grid) {
@@ -130,6 +174,7 @@ function renderRooms(rooms) {
     const el = document.createElement('div');
     el.className = `room r-${room.id}`;
     el.style.cssText = `background:linear-gradient(148deg,${c.bg});border-color:${c.border};${c.shadow?`box-shadow:0 4px 28px ${c.shadow};`:''}`;
+    if (room.colspan && room.colspan > 1) el.style.gridColumn = `span ${room.colspan}`;
     el.dataset.roomId = room.id;
     el.innerHTML = `
       <div class="glow" style="background:radial-gradient(circle,${c.glow},transparent);"></div>
@@ -148,20 +193,98 @@ function renderRooms(rooms) {
           ${haAc ? `<button class="rbtn rbtn-off" data-action="ac" onclick="E(event)">❄️ Off</button>` : ''}
           ${hasTv ? `<button class="rbtn rbtn-off" data-action="tv" onclick="E(event)">📺 TV</button>` : ''}
         </div>
-      </div>`;
-    el.addEventListener('click', () => pop(room.id));
-    // bind quick buttons
+      </div>
+      <div class="rh" title="Drag to resize">⟺</div>`;
+    el.addEventListener('click', () => { if (!_editMode) pop(room.id); });
     el.querySelectorAll('.rbtn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
+        if (_editMode) return;
         const action = btn.dataset.action;
         if (action === 'light') window.haToggle(room.lights[0]);
         else if (action === 'ac') window.haClimateMode(room.ac, btn.textContent.includes('Off') ? 'cool' : 'off');
         else if (action === 'tv') window.haToggle(room.tv);
       });
     });
+    // Resize handle drag
+    const rh = el.querySelector('.rh');
+    if (rh) _bindResizeHandle(rh, room);
     rg.appendChild(el);
   }
+}
+
+function _bindResizeHandle(handle, room) {
+  let startX = 0, startColspan = 1;
+
+  function getColCount() {
+    const bps = [...(_layout?.grid?.breakpoints ?? [{ minWidth:0, cols:2 }, { minWidth:768, cols:3 }, { minWidth:1100, cols:4 }])].sort((a,b)=>a.minWidth-b.minWidth);
+    let cols = 2;
+    for (const bp of bps) { if (window.innerWidth >= bp.minWidth) cols = bp.cols; }
+    return cols;
+  }
+
+  function onMove(x) {
+    const rg = document.querySelector('.rg');
+    if (!rg) return;
+    const colW = rg.getBoundingClientRect().width / getColCount();
+    const delta = Math.round((x - startX) / colW);
+    const maxCols = getColCount();
+    const newSpan = Math.max(1, Math.min(maxCols, startColspan + delta));
+    if (newSpan !== (room.colspan || 1)) {
+      room.colspan = newSpan;
+      const card = document.querySelector(`.room.r-${room.id}`);
+      if (card) card.style.gridColumn = newSpan > 1 ? `span ${newSpan}` : '';
+    }
+  }
+
+  function onEnd() {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onEnd);
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', onEnd);
+    _saveLayoutSilent();
+  }
+
+  function onMouseMove(e) { onMove(e.clientX); }
+  function onTouchMove(e) { e.preventDefault(); onMove(e.touches[0].clientX); }
+
+  handle.addEventListener('mousedown', e => {
+    if (!_editMode) return;
+    e.stopPropagation(); e.preventDefault();
+    startX = e.clientX; startColspan = room.colspan || 1;
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onEnd);
+  });
+  handle.addEventListener('touchstart', e => {
+    if (!_editMode) return;
+    e.stopPropagation();
+    startX = e.touches[0].clientX; startColspan = room.colspan || 1;
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  }, { passive: true });
+}
+
+function toggleEditMode() {
+  _editMode = !_editMode;
+  document.body.classList.toggle('ha-edit', _editMode);
+  const chip = document.getElementById('edit-chip');
+  if (chip) {
+    chip.textContent = _editMode ? '✅ Done Editing' : '✏️ Edit Layout';
+    chip.style.cssText = _editMode
+      ? 'cursor:pointer;border-color:rgba(16,185,129,.4);color:#6ee7b7'
+      : 'cursor:pointer;border-color:rgba(251,191,36,.25);color:#fde68a';
+  }
+}
+
+async function _saveLayoutSilent() {
+  if (!_layout) return;
+  try {
+    await fetch('/api/layout', {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(_layout),
+    });
+  } catch { /* silent */ }
 }
 
 function renderSensors(sensors) {
@@ -209,9 +332,11 @@ document.addEventListener('ha-states-updated', (ev) => {
     updateRoomCard(s, r);
   }
 
-  // status row
-  const lightEntities = L?.status?.lights ?? _FALLBACK_LIGHTS;
-  const acEntities    = L?.status?.acs    ?? ['climate.1e05049f','climate.1e050116','climate.1e51b62f','climate.1e51bb2c'];
+  // status row — non-admins only count entities from their accessible rooms
+  const _isAdmin = _tokenPayload?.role === 'admin';
+  const _visRooms = (L?.rooms ?? _FALLBACK_ROOMS).filter(r => r.visible);
+  const lightEntities = _isAdmin ? (L?.status?.lights ?? _FALLBACK_LIGHTS) : _visRooms.flatMap(r => r.lights);
+  const acEntities    = _isAdmin ? (L?.status?.acs ?? ['climate.1e05049f','climate.1e050116','climate.1e51b62f','climate.1e51bb2c']) : _visRooms.filter(r => r.ac).map(r => r.ac);
   const lightsOn = lightEntities.filter(e => s[e]?.state === 'on').length;
   const svEls = document.querySelectorAll('.sv');
   if (svEls[0]) {

@@ -7,6 +7,7 @@ const JWT_SECRET = process.env.JWT_SECRET ?? crypto.randomUUID() + crypto.random
 
 export interface TokenPayload {
   userId: string;
+  name: string;
   role: 'admin' | 'user';
   allowedRooms: string[] | null;
   allowedTabs: string[] | null;
@@ -22,18 +23,19 @@ export async function validatePassword(password: string): Promise<boolean> {
   return bcrypt.compare(password, config.passwordHash);
 }
 
-// Validate login: named users first, then fall back to admin
+// Validate login: 'admin' username (or blank) → main admin password; others → named users
 export async function validateUserLogin(username: string | undefined, password: string): Promise<TokenPayload | null> {
-  if (username) {
+  const isAdminLogin = !username || username.toLowerCase() === 'admin';
+  if (!isAdminLogin) {
     const layout = getLayout();
-    const user = layout.users.find(u => u.name.toLowerCase() === username.toLowerCase() || u.id === username);
+    const user = layout.users.find(u => u.name.toLowerCase() === username!.toLowerCase() || u.id === username);
     if (user && await bcrypt.compare(password, user.passwordHash)) {
-      return { userId: user.id, role: user.role, allowedRooms: user.allowedRooms, allowedTabs: user.allowedTabs };
+      return { userId: user.id, name: user.name, role: user.role, allowedRooms: user.allowedRooms, allowedTabs: user.allowedTabs };
     }
     return null;
   }
   if (await validatePassword(password)) {
-    return { userId: 'admin', role: 'admin', allowedRooms: null, allowedTabs: null };
+    return { userId: 'admin', name: 'Admin', role: 'admin', allowedRooms: null, allowedTabs: null };
   }
   return null;
 }

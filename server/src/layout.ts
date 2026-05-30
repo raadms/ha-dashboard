@@ -20,6 +20,7 @@ export interface RoomConfig {
   color: string;
   visible: boolean;
   order: number;
+  colspan?: number;
   lights: string[];
   ac?: string;
   tv?: string;
@@ -116,22 +117,22 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
   },
   rooms: [
     { id:'lr', name:'Living Room',  icon:'🛋️', color:'blue',   visible:true, order:0,
-      lights:['switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509'],
+      lights:['switch.livingroomswitch1_left','switch.livingroomswitch1_center','switch.livingroomswitch1_right','switch.livingroomswitch2_left','switch.livingroomswitch2_center','switch.livingroomswitch2_right','light.tv_led','light.yeelight_colorb_0x1b35f509'],
       ac:'climate.1e05049f', tv:'media_player.lg_webos_tv_uj670v', extras:[] },
     { id:'bd', name:'Bedroom',      icon:'🛏️', color:'purple', visible:true, order:1,
-      lights:['switch.masterroom_group_switch','switch.master_lights_left','switch.master_lights_center','switch.master_lights_right','switch.master_lights1_left','switch.master_lights1_center','switch.master_lights1_right','switch.master_bath_left','switch.master_bath_center','switch.master_bath_right'],
+      lights:['switch.master_lights_left','switch.master_lights_center','switch.master_lights_right','switch.master_lights1_left','switch.master_lights1_center','switch.master_lights1_right','switch.master_bath_left','switch.master_bath_center','switch.master_bath_right'],
       ac:'climate.1e050116', extras:[] },
     { id:'kt', name:'Kitchen',      icon:'🍳', color:'amber',  visible:true, order:2,
-      lights:['switch.kitchen_group_switch','switch.kitchenlights_left','switch.kitchenlights_right','light.wled_2'], extras:[] },
+      lights:['switch.kitchenlights_left','switch.kitchenlights_right','light.wled_2'], extras:[] },
     { id:'of', name:'Office',       icon:'💼', color:'cyan',   visible:true, order:3,
-      lights:['switch.office_group_swithces','switch.office_light_left','switch.office_light_right'],
+      lights:['switch.office_light_left','switch.office_light_right'],
       ac:'climate.1e51b62f', extras:[] },
     { id:'br', name:'Baby Room',    icon:'👶', color:'pink',   visible:true, order:4,
       lights:['switch.baby_room'], extras:[] },
     { id:'gr', name:'Guest Room',   icon:'🚪', color:'green',  visible:true, order:5,
-      lights:['switch.guest_room_switches','switch.guest_light_left','switch.guest_light_right','switch.guest_light_center'], extras:[] },
+      lights:['switch.guest_light_left','switch.guest_light_right','switch.guest_light_center'], extras:[] },
     { id:'hw', name:'Hallway',      icon:'🏠', color:'indigo', visible:true, order:6,
-      lights:['switch.hallway_switches','switch.collidor','switch.betweenroomslights_left','switch.betweenroomslights_right','switch.entrance_light_left','switch.entrance_light_right'], extras:[] },
+      lights:['switch.collidor','switch.betweenroomslights_left','switch.betweenroomslights_right','switch.entrance_light_left','switch.entrance_light_right'], extras:[] },
     { id:'ln', name:'Laundry',      icon:'🧺', color:'rose',   visible:true, order:7,
       lights:['switch.laundry_light_left','switch.laundry_light_right'],
       ac:'climate.1e51bb2c', extras:[] },
@@ -153,7 +154,9 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
   },
   status: {
     lights: [
-      'switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509',
+      'switch.livingroomswitch1_left','switch.livingroomswitch1_center','switch.livingroomswitch1_right',
+      'switch.livingroomswitch2_left','switch.livingroomswitch2_center','switch.livingroomswitch2_right',
+      'light.tv_led','light.yeelight_colorb_0x1b35f509',
       'switch.kitchenlights_left','switch.kitchenlights_right','light.wled_2',
       'switch.master_lights_left','switch.master_lights_center','switch.master_lights_right',
       'switch.master_lights1_left','switch.master_lights1_center','switch.master_lights1_right',
@@ -161,7 +164,7 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
       'switch.office_light_left','switch.office_light_right',
       'switch.baby_room',
       'switch.guest_light_left','switch.guest_light_right','switch.guest_light_center',
-      'switch.hallway_switches','switch.entrance_light_left','switch.entrance_light_right',
+      'switch.entrance_light_left','switch.entrance_light_right',
       'switch.collidor','switch.betweenroomslights_left','switch.betweenroomslights_right',
       'switch.laundry_light_left','switch.laundry_light_right',
     ],

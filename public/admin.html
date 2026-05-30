@@ -231,6 +231,19 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
 
+/* ── Entity autocomplete dropdown ── */
+.ei-wrap{position:relative}
+.ent-dd{display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;
+  max-height:220px;overflow-y:auto;
+  background:#16243a;border:1px solid var(--bd2);border-radius:10px;
+  z-index:600;box-shadow:0 8px 24px rgba(0,0,0,.5);scrollbar-width:thin}
+.ent-dd.open{display:block}
+.ent-dd-item{padding:8px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s}
+.ent-dd-item:last-child{border-bottom:none}
+.ent-dd-item:hover,.ent-dd-item.hl{background:var(--blue2)}
+.ent-dd-id{font-family:'SF Mono',Monaco,monospace;font-size:11px;color:var(--muted2)}
+.ent-dd-nm{font-size:11px;color:var(--muted);margin-top:2px}
+
 /* ── Responsive ── */
 @media(max-width:900px){
   .row3{grid-template-columns:1fr 1fr}
@@ -314,6 +327,11 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
     <div class="card">
       <div class="card-title">Tabs</div>
       <div id="tabs-cfg"></div>
+    </div>
+    <div class="card" style="border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.04)">
+      <div class="card-title" style="color:#fca5a5">Danger Zone</div>
+      <p style="font-size:13px;color:var(--muted2);margin-bottom:14px">Reset all layout configuration to factory defaults. Your user accounts are preserved.</p>
+      <button class="btn" style="background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3)" onclick="resetToDefaults()">↺ Reset to Defaults</button>
     </div>
   </div>
 
@@ -712,6 +730,7 @@ function clearDirty() {
     document.getElementById('loading').style.display = 'none';
     renderAll();
     goSec('rooms');
+    setupAllEntityInputs();
   } catch { document.getElementById('loading').innerHTML = '<span style="color:#fca5a5">Failed to load layout</span>'; }
 })();
 
@@ -1259,6 +1278,10 @@ function renderChips() {
     </div>
     <div class="field"><label>Weather Entity</label><input id="chip-weather-ent" value="${esc(chips.weather?.entity || '')}" placeholder="weather.forecast_home" oninput="dirty()"/></div>
   `;
+  ['chip-door-ent','chip-weather-ent'].forEach(id => {
+    const inp = document.getElementById(id);
+    if (inp) bindEntityInput(inp);
+  });
 }
 
 function toggleChip(key, el) {
@@ -1550,6 +1573,105 @@ function esc(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 function logout() { sessionStorage.removeItem('ha_dash_token'); location.href = '/login'; }
+
+// ── Entity autocomplete ───────────────────────────────────────────────────────
+async function _ensureEntities() {
+  if (_scanEnts !== null) return _scanEnts;
+  try {
+    const data = await api('GET', '/api/ha/entities');
+    _scanEnts = Array.isArray(data) ? data : [];
+  } catch { _scanEnts = []; }
+  return _scanEnts;
+}
+
+function bindEntityInput(input) {
+  if (!input || input.dataset.entBound) return;
+  input.dataset.entBound = '1';
+
+  const parent = input.parentElement;
+  if (parent && getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+
+  const dd = document.createElement('div');
+  dd.className = 'ent-dd';
+  (parent || input.parentNode).appendChild(dd);
+
+  let _hl = -1;
+
+  async function showDd(q) {
+    if (!q || q.length < 2) { dd.classList.remove('open'); return; }
+    const ents = await _ensureEntities();
+    const lq = q.toLowerCase();
+    const filtered = ents
+      .filter(e => e.entity_id.toLowerCase().includes(lq) || (e.attributes?.friendly_name || '').toLowerCase().includes(lq))
+      .slice(0, 50);
+    if (!filtered.length) { dd.classList.remove('open'); return; }
+    dd.innerHTML = '';
+    _hl = -1;
+    filtered.forEach(e => {
+      const item = document.createElement('div');
+      item.className = 'ent-dd-item';
+      const nm = e.attributes?.friendly_name;
+      item.innerHTML = `<div class="ent-dd-id">${esc(e.entity_id)}</div>${nm ? `<div class="ent-dd-nm">${esc(nm)}</div>` : ''}`;
+      item.addEventListener('mousedown', ev => {
+        ev.preventDefault();
+        input.value = e.entity_id;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        dirty();
+        dd.classList.remove('open');
+      });
+      dd.appendChild(item);
+    });
+    dd.classList.add('open');
+  }
+
+  function hl(idx) {
+    const items = dd.querySelectorAll('.ent-dd-item');
+    items.forEach(it => it.classList.remove('hl'));
+    _hl = Math.max(0, Math.min(items.length - 1, idx));
+    items[_hl]?.classList.add('hl');
+    items[_hl]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  input.addEventListener('focus', () => { if (input.value.length >= 2) showDd(input.value); });
+  input.addEventListener('input', () => showDd(input.value));
+  input.addEventListener('keydown', e => {
+    if (!dd.classList.contains('open')) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); hl(_hl + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); hl(_hl - 1); }
+    else if (e.key === 'Enter' && _hl >= 0) { e.preventDefault(); dd.querySelectorAll('.ent-dd-item')[_hl]?.dispatchEvent(new MouseEvent('mousedown')); }
+    else if (e.key === 'Escape') dd.classList.remove('open');
+  });
+  input.addEventListener('blur', () => setTimeout(() => dd.classList.remove('open'), 180));
+}
+
+function setupAllEntityInputs() {
+  ['rm-ac','rm-tv','rm-lights-inp','ex-ent','sn-ent','cam-ent','pl-ent','ap-ent',
+   'i-tvremote','i-radio','i-alarm','i-nas','i-lock','i-lockbat',
+   'st-lights-inp','st-acs-inp','i-water'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) bindEntityInput(el);
+  });
+}
+
+// ── Reset to Defaults ─────────────────────────────────────────────────────────
+async function resetToDefaults() {
+  if (!confirm('Reset ALL layout settings to factory defaults? This cannot be undone.')) return;
+  try {
+    const def = await api('GET', '/api/layout/default');
+    if (def.error) { toast('Failed to load defaults', false); return; }
+    // Preserve users
+    def.users = L.users || [];
+    const res = await api('PUT', '/api/layout', def);
+    if (res.ok) {
+      L = def;
+      renderAll();
+      clearDirty();
+      toast('Reset to defaults ✓');
+    } else {
+      toast('Reset failed: ' + (res.error || 'unknown'), false);
+    }
+  } catch { toast('Reset failed', false); }
+}
 </script>
 </body>
 </html>
