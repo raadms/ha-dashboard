@@ -1,8 +1,16 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { getConfig } from './config.js';
+import { getLayout } from './layout.js';
 
 const JWT_SECRET = process.env.JWT_SECRET ?? crypto.randomUUID() + crypto.randomUUID();
+
+export interface TokenPayload {
+  userId: string;
+  role: 'admin' | 'user';
+  allowedRooms: string[] | null;
+  allowedTabs: string[] | null;
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
@@ -14,6 +22,22 @@ export async function validatePassword(password: string): Promise<boolean> {
   return bcrypt.compare(password, config.passwordHash);
 }
 
+// Validate login: named users first, then fall back to admin
+export async function validateUserLogin(username: string | undefined, password: string): Promise<TokenPayload | null> {
+  if (username) {
+    const layout = getLayout();
+    const user = layout.users.find(u => u.name.toLowerCase() === username.toLowerCase() || u.id === username);
+    if (user && await bcrypt.compare(password, user.passwordHash)) {
+      return { userId: user.id, role: user.role, allowedRooms: user.allowedRooms, allowedTabs: user.allowedTabs };
+    }
+    return null;
+  }
+  if (await validatePassword(password)) {
+    return { userId: 'admin', role: 'admin', allowedRooms: null, allowedTabs: null };
+  }
+  return null;
+}
+
 const DURATION_MAP = {
   '5m':    '5m',
   '1h':    '1h',
@@ -22,19 +46,18 @@ const DURATION_MAP = {
   '30d':   '30d',
   'never': '3650d',
 } as const;
-
 type DurationKey = keyof typeof DURATION_MAP;
 
-export function signToken(duration = '30d'): string {
+export function signToken(payload: TokenPayload, duration = '30d'): string {
   const key: DurationKey = (duration in DURATION_MAP ? duration : '30d') as DurationKey;
-  return jwt.sign({ auth: true }, JWT_SECRET, { expiresIn: DURATION_MAP[key] });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: DURATION_MAP[key] });
 }
 
-export function verifyToken(token: string): boolean {
-  try {
-    jwt.verify(token, JWT_SECRET);
-    return true;
-  } catch {
-    return false;
-  }
+export function verifyToken(token: string): TokenPayload | null {
+  try { return jwt.verify(token, JWT_SECRET) as TokenPayload; }
+  catch { return null; }
+}
+
+export function isAdminToken(token: string): boolean {
+  return verifyToken(token)?.role === 'admin';
 }

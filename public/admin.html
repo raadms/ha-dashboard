@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>Admin · Safrani Home</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07090f;
+  --sf:rgba(255,255,255,.055);
+  --sf2:rgba(255,255,255,.09);
+  --bd:rgba(255,255,255,.10);
+  --bd2:rgba(255,255,255,.16);
+  --text:#f1f5f9;
+  --muted:#64748b;
+  --muted2:#94a3b8;
+  --blue:#5b8dee;
+  --blue2:rgba(91,141,238,.22);
+  --r:14px;
+  --sb:220px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,'SF Pro Display','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+
+/* ── Layout ── */
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* ── Sidebar ── */
+.sidebar{
+  width:var(--sb);flex-shrink:0;
+  background:rgba(255,255,255,.025);border-right:1px solid var(--bd);
+  display:flex;flex-direction:column;overflow-y:auto;
+}
+.sb-top{padding:18px 16px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px}
+.sb-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,rgba(91,141,238,.35),rgba(91,141,238,.15));border:1px solid rgba(91,141,238,.3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.sb-name{font-size:13px;font-weight:700;line-height:1.3}
+.sb-sub{font-size:11px;color:var(--muted)}
+.nav-grp{padding:8px 8px 4px}
+.nav-lbl{font-size:10px;font-weight:600;letter-spacing:.9px;color:var(--muted);text-transform:uppercase;padding:4px 8px 6px;display:block}
+.nav-item{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 12px;border-radius:10px;cursor:pointer;
+  font-size:13px;font-weight:500;color:var(--muted2);
+  transition:all .15s;margin-bottom:2px;
+}
+.nav-item:hover{background:var(--sf2);color:var(--text)}
+.nav-item.active{background:var(--blue2);color:#93c5fd;border:1px solid rgba(91,141,238,.25)}
+.nav-item .ni{font-size:15px;width:20px;text-align:center}
+.sb-foot{margin-top:auto;padding:14px;border-top:1px solid var(--bd)}
+.save-btn{
+  width:100%;padding:11px;border-radius:12px;border:none;cursor:pointer;
+  font-size:13px;font-weight:700;font-family:inherit;
+  background:var(--blue);color:#fff;
+  transition:all .2s;display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.save-btn:hover{filter:brightness(1.1)}
+.save-btn:disabled{opacity:.45;cursor:default}
+.save-btn.dirty{box-shadow:0 0 0 3px rgba(91,141,238,.35);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(91,141,238,.35)}50%{box-shadow:0 0 0 6px rgba(91,141,238,.1)}}
+.dirty-dot{width:7px;height:7px;border-radius:50%;background:#fbbf24;display:none}
+.save-btn.dirty .dirty-dot{display:block}
+.sb-links{display:flex;gap:6px;margin-top:8px}
+.sb-links .btn{flex:1;padding:8px 6px;font-size:11px;justify-content:center}
+
+/* ── Main ── */
+.main{flex:1;overflow-y:auto;padding:28px 32px}
+
+/* ── Sections ── */
+.sec{display:none}
+.sec.active{display:block}
+.sec-hd{margin-bottom:22px}
+.sec-hd h2{font-size:22px;font-weight:800;margin-bottom:4px}
+.sec-hd p{font-size:13px;color:var(--muted2)}
+
+/* ── Cards ── */
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:18px;padding:18px 20px;margin-bottom:16px}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2);margin-bottom:14px}
+
+/* ── Form ── */
+label{display:block;font-size:11px;font-weight:600;letter-spacing:.8px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px}
+input,select,textarea{
+  width:100%;background:rgba(255,255,255,.06);border:1px solid var(--bd);
+  border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;
+  font-family:inherit;outline:none;transition:border-color .2s;
+}
+input:focus,select:focus,textarea:focus{border-color:rgba(91,141,238,.6)}
+input::placeholder{color:var(--muted)}
+select option{background:#1e293b}
+textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Monaco,monospace;line-height:1.5}
+.field{margin-bottom:14px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px}
+
+/* ── Buttons ── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:8px 14px;border-radius:10px;border:none;cursor:pointer;
+  font-size:13px;font-weight:600;font-family:inherit;transition:all .15s;
+}
+.btn:active{transform:scale(.97)}
+.btn-p{background:var(--blue);color:#fff}
+.btn-p:hover{filter:brightness(1.1)}
+.btn-s{background:var(--sf2);color:var(--text);border:1px solid var(--bd)}
+.btn-s:hover{background:rgba(255,255,255,.14)}
+.btn-d{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}
+.btn-d:hover{background:rgba(239,68,68,.25)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px;border-radius:7px}
+
+/* ── Toggle ── */
+.tog{
+  position:relative;width:36px;height:20px;flex-shrink:0;
+  background:rgba(255,255,255,.12);border-radius:10px;cursor:pointer;
+  border:1px solid var(--bd);transition:background .2s;
+}
+.tog.on{background:rgba(91,141,238,.6);border-color:rgba(91,141,238,.4)}
+.tog::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .2s}
+.tog.on::after{transform:translateX(16px)}
+
+/* ── Room list ── */
+.room-list{display:flex;flex-direction:column;gap:8px}
+.room-row{
+  display:flex;align-items:center;gap:12px;
+  background:var(--sf2);border:1px solid var(--bd);
+  border-radius:12px;padding:11px 14px;transition:all .15s;
+}
+.room-row.drag-over{border-color:var(--blue);background:var(--blue2)}
+.drag-h{cursor:grab;color:var(--muted);font-size:18px;line-height:1;user-select:none}
+.drag-h:active{cursor:grabbing}
+.room-ic{font-size:22px;width:34px;text-align:center;flex-shrink:0}
+.room-nm{flex:1}
+.room-nm-t{font-size:14px;font-weight:600}
+.room-nm-s{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── Tag list ── */
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:24px}
+.tag{
+  display:inline-flex;align-items:center;gap:4px;
+  background:rgba(255,255,255,.08);border:1px solid var(--bd);
+  border-radius:7px;padding:3px 7px;font-size:11px;color:var(--muted2);
+  font-family:'SF Mono',Monaco,monospace;
+}
+.tag .x{cursor:pointer;color:var(--muted);margin-left:2px;font-size:13px;line-height:1}
+.tag .x:hover{color:#fca5a5}
+.add-row{display:flex;gap:8px}
+.add-row input{flex:1}
+
+/* ── Color swatches ── */
+.clr-grid{display:flex;flex-wrap:wrap;gap:8px}
+.clr-sw{
+  width:30px;height:30px;border-radius:8px;cursor:pointer;
+  border:2px solid transparent;transition:all .15s;
+}
+.clr-sw.sel{border-color:#fff;transform:scale(1.12)}
+
+/* ── List rows ── */
+.list-rows{display:flex;flex-direction:column;gap:7px;margin-bottom:10px}
+.lr{
+  display:flex;align-items:center;gap:10px;
+  background:var(--sf2);border:1px solid var(--bd);
+  border-radius:10px;padding:10px 12px;
+}
+.lr-ic{font-size:18px;width:26px;text-align:center;flex-shrink:0}
+.lr-info{flex:1;min-width:0}
+.lr-name{font-size:13px;font-weight:600}
+.lr-ent{font-size:11px;color:var(--muted);font-family:'SF Mono',Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+
+/* ── Breakpoints table ── */
+.bp-tbl{width:100%;border-collapse:collapse}
+.bp-tbl th{font-size:11px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);padding:8px 8px;text-align:left;border-bottom:1px solid var(--bd)}
+.bp-tbl td{padding:6px 4px}
+.bp-tbl input{padding:7px 9px;font-size:12px}
+
+/* ── Modal ── */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.backdrop.open{display:flex}
+.modal{background:#0f1729;border:1px solid var(--bd2);border-radius:20px;width:100%;max-width:540px;max-height:88vh;overflow-y:auto;box-shadow:0 32px 64px rgba(0,0,0,.6)}
+.modal-sm{max-width:400px}
+.mhd{padding:18px 22px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#0f1729;z-index:1}
+.mhd h3{font-size:16px;font-weight:700}
+.mclose{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px;line-height:1}
+.mclose:hover{color:var(--text)}
+.mbody{padding:18px 22px}
+.mfoot{padding:14px 22px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:#0f1729}
+
+/* ── Error / OK boxes ── */
+.err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:10px 13px;font-size:12px;color:#fca5a5;display:none}
+.err.show{display:block}
+
+/* ── User card ── */
+.user-row{display:flex;align-items:center;gap:12px;background:var(--sf2);border:1px solid var(--bd);border-radius:12px;padding:12px 16px;margin-bottom:8px}
+.u-av{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,rgba(91,141,238,.35),rgba(91,141,238,.15));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-weight:700}
+.badge{padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.ba{background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.2)}
+.bu{background:rgba(148,163,184,.1);color:var(--muted2);border:1px solid var(--bd)}
+
+/* ── Checkbox grid ── */
+.chk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:7px}
+.chk-item{display:flex;align-items:center;gap:8px;background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;cursor:pointer}
+.chk-item input{width:15px;height:15px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
+.chk-item span{font-size:12px;font-weight:500;color:var(--text)}
+
+/* ── Edit row ── */
+.edit-row{display:flex;align-items:center;gap:10px;background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+
+/* ── Scanner ── */
+.dom-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.dpill{padding:4px 10px;border-radius:20px;background:var(--sf);border:1px solid var(--bd);font-size:11px;font-weight:600;color:var(--muted2);cursor:pointer;transition:all .15s}
+.dpill.active{background:var(--blue2);border-color:rgba(91,141,238,.4);color:#93c5fd}
+.ent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(256px,1fr));gap:8px}
+.ent-card{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .15s}
+.ent-card:hover{border-color:rgba(91,141,238,.4);background:var(--blue2)}
+.ent-id{font-size:11px;color:var(--muted);font-family:'SF Mono',Monaco,monospace;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ent-nm{font-size:13px;font-weight:600;margin-bottom:2px}
+.ent-st{font-size:11px;color:var(--muted2)}
+.ent-cnt{font-size:12px;color:var(--muted);margin-bottom:12px}
+
+/* ── Spinner ── */
+.spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1e293b;border:1px solid var(--bd2);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:600;transition:transform .3s ease;z-index:9999;white-space:nowrap}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.ok{border-color:rgba(16,185,129,.35);color:#6ee7b7}
+.toast.err{border-color:rgba(239,68,68,.35);color:#fca5a5}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+
+/* ── Responsive ── */
+@media(max-width:900px){
+  .row3{grid-template-columns:1fr 1fr}
+  .main{padding:20px}
+}
+@media(max-width:640px){
+  .sidebar{display:none}
+  .main{padding:16px}
+  .row2,.row3{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ── Sidebar ─────────────────────────────────────────────────────────────── -->
+<nav class="sidebar">
+  <div class="sb-top">
+    <div class="sb-logo">🏠</div>
+    <div>
+      <div class="sb-name" id="dash-title">Dashboard</div>
+      <div class="sb-sub">Admin Panel</div>
+    </div>
+  </div>
+
+  <div class="nav-grp">
+    <span class="nav-lbl">Configuration</span>
+    <div class="nav-item active" data-sec="rooms" onclick="goSec('rooms')"><span class="ni">🛋️</span> Rooms</div>
+    <div class="nav-item" data-sec="layout" onclick="goSec('layout')"><span class="ni">⚙️</span> Layout & Tabs</div>
+    <div class="nav-item" data-sec="security" onclick="goSec('security')"><span class="ni">🔒</span> Security</div>
+    <div class="nav-item" data-sec="media" onclick="goSec('media')"><span class="ni">📺</span> Media</div>
+    <div class="nav-item" data-sec="status" onclick="goSec('status')"><span class="ni">📊</span> Status & Chips</div>
+  </div>
+
+  <div class="nav-grp">
+    <span class="nav-lbl">People</span>
+    <div class="nav-item" data-sec="users" onclick="goSec('users')"><span class="ni">👥</span> Users</div>
+  </div>
+
+  <div class="nav-grp">
+    <span class="nav-lbl">Tools</span>
+    <div class="nav-item" data-sec="scanner" onclick="goSec('scanner')"><span class="ni">🔍</span> Entity Scanner</div>
+  </div>
+
+  <div class="sb-foot">
+    <button class="save-btn" id="save-btn" onclick="saveAll()">
+      <span class="dirty-dot"></span>
+      <span id="save-txt">Save Changes</span>
+    </button>
+    <div class="sb-links">
+      <button class="btn btn-s btn-sm" onclick="location.href='/'">← Dashboard</button>
+      <button class="btn btn-s btn-sm" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Main ────────────────────────────────────────────────────────────────── -->
+<main class="main">
+  <div id="loading" style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted2)">
+    <span class="spin"></span>&nbsp; Loading configuration…
+  </div>
+
+  <!-- ROOMS -->
+  <div class="sec" id="sec-rooms">
+    <div class="sec-hd"><h2>Rooms</h2><p>Drag to reorder · toggle visibility · edit entities per room.</p></div>
+    <div class="room-list" id="room-list"></div>
+    <button class="btn btn-s" style="margin-top:8px" onclick="addRoom()">+ Add Room</button>
+  </div>
+
+  <!-- LAYOUT & TABS -->
+  <div class="sec" id="sec-layout">
+    <div class="sec-hd"><h2>Layout & Tabs</h2><p>Grid columns per screen size, tab names and visibility.</p></div>
+    <div class="card">
+      <div class="card-title">Grid Breakpoints</div>
+      <table class="bp-tbl">
+        <thead><tr><th>Min Width (px)</th><th>Columns</th><th></th></tr></thead>
+        <tbody id="bp-body"></tbody>
+      </table>
+      <button class="btn btn-s btn-sm" style="margin-top:10px" onclick="addBp()">+ Add Breakpoint</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Tabs</div>
+      <div id="tabs-cfg"></div>
+    </div>
+  </div>
+
+  <!-- SECURITY -->
+  <div class="sec" id="sec-security">
+    <div class="sec-hd"><h2>Security</h2><p>Alarm, sensors, cameras and lock configuration.</p></div>
+    <div class="card">
+      <div class="card-title">Alarm & Lock</div>
+      <div class="row2">
+        <div><label>Alarm Entity</label><input id="i-alarm" placeholder="alarm_control_panel.alarmo" oninput="dirty()"/></div>
+        <div><label>NAS Storage Entity</label><input id="i-nas" placeholder="sensor.nas_storage" oninput="dirty()"/></div>
+      </div>
+      <div class="row2">
+        <div><label>Lock Entity</label><input id="i-lock" placeholder="lock.front_door" oninput="dirty()"/></div>
+        <div><label>Lock Battery Entity</label><input id="i-lockbat" placeholder="sensor.lock_battery" oninput="dirty()"/></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Sensors</div>
+      <div class="list-rows" id="sensors-list"></div>
+      <button class="btn btn-s btn-sm" onclick="openSensorModal(-1)">+ Add Sensor</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Cameras</div>
+      <div class="list-rows" id="cameras-list"></div>
+      <button class="btn btn-s btn-sm" onclick="openCameraModal(-1)">+ Add Camera</button>
+    </div>
+  </div>
+
+  <!-- MEDIA -->
+  <div class="sec" id="sec-media">
+    <div class="sec-hd"><h2>Media</h2><p>Media players, quick-launch apps and TV remote.</p></div>
+    <div class="card">
+      <div class="card-title">TV Remote & Radio</div>
+      <div class="row2">
+        <div><label>TV Remote Entity</label><input id="i-tvremote" placeholder="media_player.lg_tv" oninput="dirty()"/></div>
+        <div><label>Radio Boolean Entity</label><input id="i-radio" placeholder="input_boolean.radio" oninput="dirty()"/></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Media Players</div>
+      <div class="list-rows" id="players-list"></div>
+      <button class="btn btn-s btn-sm" onclick="openPlayerModal(-1)">+ Add Player</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Quick Launch Apps</div>
+      <div class="list-rows" id="apps-list"></div>
+      <button class="btn btn-s btn-sm" onclick="openAppModal(-1)">+ Add App</button>
+    </div>
+  </div>
+
+  <!-- STATUS & CHIPS -->
+  <div class="sec" id="sec-status">
+    <div class="sec-hd"><h2>Status & Chips</h2><p>Home page status counters and header chips.</p></div>
+    <div class="card">
+      <div class="card-title">Status Bar Entities</div>
+      <div class="field">
+        <label>Light entities (counted for "X lights on")</label>
+        <div class="tags" id="st-lights-tags"></div>
+        <div class="add-row">
+          <input id="st-lights-inp" placeholder="switch.kitchen_light" onkeydown="if(event.key==='Enter')addStEnt('lights')"/>
+          <button class="btn btn-s btn-sm" onclick="addStEnt('lights')">Add</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>AC / Climate entities</label>
+        <div class="tags" id="st-acs-tags"></div>
+        <div class="add-row">
+          <input id="st-acs-inp" placeholder="climate.living_room" onkeydown="if(event.key==='Enter')addStEnt('acs')"/>
+          <button class="btn btn-s btn-sm" onclick="addStEnt('acs')">Add</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Water Filter Entity</label>
+        <input id="i-water" placeholder="switch.water_filter" oninput="dirty()"/>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Presence Persons</div>
+      <div class="list-rows" id="presence-list"></div>
+      <button class="btn btn-s btn-sm" onclick="addPerson()">+ Add Person</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Header Chips</div>
+      <div id="chips-cfg"></div>
+    </div>
+  </div>
+
+  <!-- USERS -->
+  <div class="sec" id="sec-users">
+    <div class="sec-hd"><h2>Users</h2><p>Accounts with optional room and tab restrictions.</p></div>
+    <div id="users-list" style="margin-bottom:12px"></div>
+    <button class="btn btn-p" onclick="openUserModal(null)">+ Add User</button>
+  </div>
+
+  <!-- SCANNER -->
+  <div class="sec" id="sec-scanner">
+    <div class="sec-hd"><h2>Entity Scanner</h2><p>Browse all Home Assistant entities and assign them to rooms or tabs.</p></div>
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <input id="scan-q" placeholder="Search entity ID or name…" oninput="filterScan()" style="flex:1"/>
+      <button class="btn btn-s" onclick="loadScanner()">Refresh</button>
+    </div>
+    <div class="dom-pills" id="dom-pills"></div>
+    <div class="ent-cnt" id="ent-cnt"></div>
+    <div class="ent-grid" id="ent-grid"></div>
+  </div>
+</main>
+</div>
+
+<!-- ══ MODALS ═══════════════════════════════════════════════════════════════ -->
+
+<!-- Room modal -->
+<div class="backdrop" id="m-room">
+<div class="modal">
+  <div class="mhd"><h3 id="m-room-title">Edit Room</h3><button class="mclose" onclick="closeM('m-room')">✕</button></div>
+  <div class="mbody">
+    <div class="row2">
+      <div><label>Room Name</label><input id="rm-name" placeholder="Living Room"/></div>
+      <div><label>Icon (emoji)</label><input id="rm-icon" placeholder="🛋️" style="font-size:20px"/></div>
+    </div>
+    <div class="field"><label>ID (used internally)</label><input id="rm-id" placeholder="lr"/></div>
+    <div class="field">
+      <label>Color</label>
+      <div class="clr-grid" id="clr-grid"></div>
+    </div>
+    <div class="field">
+      <label>Light Entities</label>
+      <div class="tags" id="rm-lights-tags"></div>
+      <div class="add-row">
+        <input id="rm-lights-inp" placeholder="switch.living_room_light" onkeydown="if(event.key==='Enter')rmAddLight()"/>
+        <button class="btn btn-s btn-sm" onclick="rmAddLight()">Add</button>
+      </div>
+    </div>
+    <div class="row2">
+      <div><label>AC Entity (optional)</label><input id="rm-ac" placeholder="climate.living_room"/></div>
+      <div><label>TV Entity (optional)</label><input id="rm-tv" placeholder="media_player.lg_tv"/></div>
+    </div>
+    <div class="field">
+      <label>Extra Entities</label>
+      <div class="list-rows" id="rm-extras"></div>
+      <button class="btn btn-s btn-sm" onclick="openExtraModal(-1)">+ Add Extra</button>
+    </div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="rm-del-btn" onclick="deleteRoom()">Delete Room</button>
+    <button class="btn btn-s" onclick="closeM('m-room')">Cancel</button>
+    <button class="btn btn-p" onclick="saveRoom()">Save Room</button>
+  </div>
+</div>
+</div>
+
+<!-- Extra entity modal -->
+<div class="backdrop" id="m-extra">
+<div class="modal modal-sm">
+  <div class="mhd"><h3 id="m-extra-title">Add Extra Entity</h3><button class="mclose" onclick="closeM('m-extra')">✕</button></div>
+  <div class="mbody">
+    <div class="row2">
+      <div><label>Label</label><input id="ex-label" placeholder="Fan"/></div>
+      <div><label>Icon (emoji)</label><input id="ex-icon" placeholder="🌀"/></div>
+    </div>
+    <div class="field"><label>Entity ID</label><input id="ex-ent" placeholder="switch.bedroom_fan"/></div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="ex-del-btn" onclick="deleteExtra()">Delete</button>
+    <button class="btn btn-s" onclick="closeM('m-extra')">Cancel</button>
+    <button class="btn btn-p" onclick="saveExtra()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- Sensor modal -->
+<div class="backdrop" id="m-sensor">
+<div class="modal modal-sm">
+  <div class="mhd"><h3 id="m-sensor-title">Edit Sensor</h3><button class="mclose" onclick="closeM('m-sensor')">✕</button></div>
+  <div class="mbody">
+    <div class="row2">
+      <div><label>Label</label><input id="sn-label" placeholder="Main Door"/></div>
+      <div><label>Icon (emoji)</label><input id="sn-icon" placeholder="🚪"/></div>
+    </div>
+    <div class="field"><label>Entity ID</label><input id="sn-ent" placeholder="binary_sensor.door_contact"/></div>
+    <div class="row3">
+      <div><label>OK State</label><input id="sn-okst" placeholder="off"/></div>
+      <div><label>OK Label</label><input id="sn-oklbl" placeholder="Closed"/></div>
+      <div><label>Warn Label</label><input id="sn-warn" placeholder="Open"/></div>
+    </div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="sn-del-btn" onclick="deleteSensor()">Delete</button>
+    <button class="btn btn-s" onclick="closeM('m-sensor')">Cancel</button>
+    <button class="btn btn-p" onclick="saveSensor()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- Camera modal -->
+<div class="backdrop" id="m-camera">
+<div class="modal modal-sm">
+  <div class="mhd"><h3 id="m-cam-title">Edit Camera</h3><button class="mclose" onclick="closeM('m-camera')">✕</button></div>
+  <div class="mbody">
+    <div class="field"><label>Label</label><input id="cam-label" placeholder="Front Door"/></div>
+    <div class="field"><label>Entity ID</label><input id="cam-ent" placeholder="camera.front_door"/></div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="cam-del-btn" onclick="deleteCamera()">Delete</button>
+    <button class="btn btn-s" onclick="closeM('m-camera')">Cancel</button>
+    <button class="btn btn-p" onclick="saveCamera()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- Player modal -->
+<div class="backdrop" id="m-player">
+<div class="modal modal-sm">
+  <div class="mhd"><h3 id="m-pl-title">Edit Player</h3><button class="mclose" onclick="closeM('m-player')">✕</button></div>
+  <div class="mbody">
+    <div class="field"><label>Label</label><input id="pl-label" placeholder="LG TV · Living Room"/></div>
+    <div class="row2">
+      <div><label>Entity ID</label><input id="pl-ent" placeholder="media_player.lg_tv"/></div>
+      <div><label>Icon (emoji)</label><input id="pl-icon" placeholder="📺"/></div>
+    </div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="pl-del-btn" onclick="deletePlayer()">Delete</button>
+    <button class="btn btn-s" onclick="closeM('m-player')">Cancel</button>
+    <button class="btn btn-p" onclick="savePlayer()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- App modal -->
+<div class="backdrop" id="m-app">
+<div class="modal modal-sm">
+  <div class="mhd"><h3 id="m-app-title">Edit App</h3><button class="mclose" onclick="closeM('m-app')">✕</button></div>
+  <div class="mbody">
+    <div class="row2">
+      <div><label>Label</label><input id="ap-label" placeholder="Netflix"/></div>
+      <div><label>Icon (emoji or name)</label><input id="ap-icon" placeholder="netflix"/></div>
+    </div>
+    <div class="field"><label>Entity ID</label><input id="ap-ent" placeholder="input_button.netflix"/></div>
+    <div class="field">
+      <label>Action Type</label>
+      <select id="ap-type">
+        <option value="input_button">input_button (press once)</option>
+        <option value="script">script</option>
+        <option value="boolean">input_boolean (toggle)</option>
+        <option value="toggle">toggle</option>
+      </select>
+    </div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="ap-del-btn" onclick="deleteApp()">Delete</button>
+    <button class="btn btn-s" onclick="closeM('m-app')">Cancel</button>
+    <button class="btn btn-p" onclick="saveApp()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- User modal -->
+<div class="backdrop" id="m-user">
+<div class="modal">
+  <div class="mhd"><h3 id="m-user-title">Add User</h3><button class="mclose" onclick="closeM('m-user')">✕</button></div>
+  <div class="mbody">
+    <div class="row2">
+      <div><label>Username</label><input id="u-name" placeholder="Rola"/></div>
+      <div><label>Role</label><select id="u-role"><option value="user">User</option><option value="admin">Admin</option></select></div>
+    </div>
+    <div class="field">
+      <label>Password <span id="u-pwd-hint" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">(leave blank to keep existing)</span></label>
+      <input type="password" id="u-pwd" placeholder="Minimum 8 characters"/>
+    </div>
+    <div class="field">
+      <label>Accessible Rooms <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— leave all checked for full access</span></label>
+      <div class="chk-grid" id="u-rooms"></div>
+    </div>
+    <div class="field">
+      <label>Accessible Tabs <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— leave all checked for full access</span></label>
+      <div class="chk-grid" id="u-tabs"></div>
+    </div>
+    <div class="err" id="u-err"></div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="u-del-btn" onclick="deleteUser()">Delete</button>
+    <button class="btn btn-s" onclick="closeM('m-user')">Cancel</button>
+    <button class="btn btn-p" onclick="saveUser()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- Assign modal -->
+<div class="backdrop" id="m-assign">
+<div class="modal modal-sm">
+  <div class="mhd"><h3>Assign Entity</h3><button class="mclose" onclick="closeM('m-assign')">✕</button></div>
+  <div class="mbody">
+    <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div id="asgn-id" style="font-family:'SF Mono',Monaco,monospace;font-size:11px;color:var(--muted);margin-bottom:3px"></div>
+      <div id="asgn-nm" style="font-size:14px;font-weight:600;margin-bottom:3px"></div>
+      <div id="asgn-st" style="font-size:11px;color:var(--muted2)"></div>
+    </div>
+    <div class="field">
+      <label>Assign To</label>
+      <select id="asgn-dest">
+        <option value="">— Select destination —</option>
+        <optgroup label="Rooms" id="asgn-rooms"></optgroup>
+        <optgroup label="Status">
+          <option value="status_lights">Status → Lights</option>
+          <option value="status_acs">Status → ACs</option>
+        </optgroup>
+        <optgroup label="Security">
+          <option value="sec_alarm">Security → Alarm entity</option>
+          <option value="sec_sensor">Security → New Sensor</option>
+          <option value="sec_camera">Security → New Camera</option>
+        </optgroup>
+        <optgroup label="Media">
+          <option value="media_player">Media → New Player</option>
+          <option value="media_tvremote">Media → TV Remote</option>
+          <option value="media_radio">Media → Radio Boolean</option>
+        </optgroup>
+      </select>
+    </div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-s" onclick="closeM('m-assign')">Cancel</button>
+    <button class="btn btn-p" onclick="doAssign()">Assign</button>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ══ SCRIPT ════════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+const TOKEN = sessionStorage.getItem('ha_dash_token');
+if (!TOKEN) location.href = '/login';
+
+const COLORS = [
+  {name:'blue',   bg:'#3b82f6'},
+  {name:'purple', bg:'#a855f7'},
+  {name:'amber',  bg:'#f59e0b'},
+  {name:'cyan',   bg:'#06b6d4'},
+  {name:'pink',   bg:'#ec4899'},
+  {name:'green',  bg:'#10b981'},
+  {name:'indigo', bg:'#6366f1'},
+  {name:'rose',   bg:'#f43f5e'},
+];
+const TABS = ['home','security','climate','media'];
+const TAB_LBL = {home:'Home',security:'Security',climate:'Climate',media:'TV & Media'};
+
+let L = null;       // layout object
+let _isDirty = false;
+let _editRoomId = null;
+let _editExtraIdx = -1;
+let _editSensorIdx = -1;
+let _editCamIdx = -1;
+let _editPlIdx = -1;
+let _editAppIdx = -1;
+let _editUserId = null;
+let _scanEnts = null;
+let _scanDomain = '';
+let _asgnEnt = null;
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { Authorization: 'Bearer ' + TOKEN } };
+  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const r = await fetch(path, opts);
+  if (r.status === 401 || r.status === 403) { location.href = '/login'; throw new Error('Auth'); }
+  return r.json();
+}
+
+function toast(msg, ok = true) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + (ok ? 'ok' : 'err');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function dirty() {
+  _isDirty = true;
+  document.getElementById('save-btn').classList.add('dirty');
+}
+function clearDirty() {
+  _isDirty = false;
+  document.getElementById('save-btn').classList.remove('dirty');
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    const [layout, cfg] = await Promise.all([api('GET', '/api/layout'), api('GET', '/api/config')]);
+    if (layout.error) { toast('Not authorized', false); location.href = '/'; return; }
+    L = layout;
+    document.getElementById('dash-title').textContent = cfg.name || 'Dashboard';
+    document.getElementById('loading').style.display = 'none';
+    renderAll();
+    goSec('rooms');
+  } catch { document.getElementById('loading').innerHTML = '<span style="color:#fca5a5">Failed to load layout</span>'; }
+})();
+
+// ── NAV ───────────────────────────────────────────────────────────────────────
+function goSec(name) {
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name)?.classList.add('active');
+  document.querySelector(`[data-sec="${name}"]`)?.classList.add('active');
+  if (name === 'scanner' && !_scanEnts) loadScanner();
+}
+
+// ── RENDER ALL ────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderRooms();
+  renderBreakpoints();
+  renderTabs();
+  renderSecurity();
+  renderMedia();
+  renderStatus();
+  renderUsers();
+}
+
+// ── ROOMS ─────────────────────────────────────────────────────────────────────
+function renderRooms() {
+  const el = document.getElementById('room-list');
+  el.innerHTML = '';
+  [...L.rooms].sort((a, b) => a.order - b.order).forEach((room, si) => {
+    const row = document.createElement('div');
+    row.className = 'room-row';
+    row.draggable = true;
+    row.dataset.rid = room.id;
+    row.innerHTML = `
+      <span class="drag-h" title="Drag to reorder">⠿</span>
+      <span class="room-ic">${esc(room.icon)}</span>
+      <div class="room-nm">
+        <div class="room-nm-t">${esc(room.name)}</div>
+        <div class="room-nm-s">${room.lights.length} lights${room.ac ? ' · AC' : ''}${room.tv ? ' · TV' : ''}${room.extras?.length ? ` · ${room.extras.length} extras` : ''}</div>
+      </div>
+      <div class="tog ${room.visible ? 'on' : ''}" title="${room.visible ? 'Visible' : 'Hidden'}" onclick="toggleRoom('${room.id}',this)"></div>
+      <button class="btn btn-s btn-sm" onclick="openRoomModal('${room.id}')">Edit</button>
+    `;
+    row.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', room.id); row.style.opacity = '.4'; });
+    row.addEventListener('dragend', () => { row.style.opacity = ''; document.querySelectorAll('.room-row').forEach(r => r.classList.remove('drag-over')); });
+    row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('drag-over'); });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      const fromId = e.dataTransfer.getData('text/plain');
+      if (fromId === room.id) return;
+      const sorted = [...L.rooms].sort((a, b) => a.order - b.order);
+      const fromIdx = sorted.findIndex(r => r.id === fromId);
+      const toIdx = sorted.findIndex(r => r.id === room.id);
+      const moved = sorted.splice(fromIdx, 1)[0];
+      sorted.splice(toIdx, 0, moved);
+      sorted.forEach((r, i) => r.order = i);
+      dirty();
+      renderRooms();
+    });
+    el.appendChild(row);
+  });
+}
+
+function toggleRoom(id, el) {
+  const r = L.rooms.find(r => r.id === id);
+  if (!r) return;
+  r.visible = !r.visible;
+  el.className = 'tog ' + (r.visible ? 'on' : '');
+  dirty();
+}
+
+function addRoom() {
+  const r = { id: 'room_' + Date.now().toString(36), name: 'New Room', icon: '🏠', color: 'blue', visible: true, order: L.rooms.length, lights: [], extras: [] };
+  L.rooms.push(r);
+  dirty();
+  renderRooms();
+  openRoomModal(r.id);
+}
+
+// ── ROOM MODAL ────────────────────────────────────────────────────────────────
+function openRoomModal(id) {
+  _editRoomId = id;
+  const room = L.rooms.find(r => r.id === id);
+  if (!room) return;
+  document.getElementById('m-room-title').textContent = 'Edit Room';
+  document.getElementById('rm-name').value = room.name;
+  document.getElementById('rm-icon').value = room.icon;
+  document.getElementById('rm-id').value = room.id;
+  document.getElementById('rm-ac').value = room.ac || '';
+  document.getElementById('rm-tv').value = room.tv || '';
+
+  const cg = document.getElementById('clr-grid');
+  cg.innerHTML = '';
+  COLORS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'clr-sw' + (room.color === c.name ? ' sel' : '');
+    sw.style.background = c.bg;
+    sw.title = c.name;
+    sw.onclick = () => { cg.querySelectorAll('.clr-sw').forEach(s => s.classList.remove('sel')); sw.classList.add('sel'); };
+    cg.appendChild(sw);
+  });
+
+  renderRmLightTags();
+  renderRmExtras();
+  document.getElementById('rm-del-btn').style.display = '';
+  openM('m-room');
+}
+
+function renderRmLightTags() {
+  const room = L.rooms.find(r => r.id === _editRoomId);
+  const el = document.getElementById('rm-lights-tags');
+  el.innerHTML = '';
+  (room?.lights || []).forEach((e, i) => {
+    const t = document.createElement('div');
+    t.className = 'tag';
+    t.innerHTML = `${esc(e)}<span class="x" onclick="rmRemoveLight(${i})">×</span>`;
+    el.appendChild(t);
+  });
+}
+
+function rmAddLight() {
+  const inp = document.getElementById('rm-lights-inp');
+  const val = inp.value.trim();
+  if (!val) return;
+  const room = L.rooms.find(r => r.id === _editRoomId);
+  if (room && !room.lights.includes(val)) { room.lights.push(val); renderRmLightTags(); dirty(); }
+  inp.value = '';
+}
+
+function rmRemoveLight(i) {
+  const room = L.rooms.find(r => r.id === _editRoomId);
+  if (room) { room.lights.splice(i, 1); renderRmLightTags(); dirty(); }
+}
+
+function renderRmExtras() {
+  const room = L.rooms.find(r => r.id === _editRoomId);
+  const el = document.getElementById('rm-extras');
+  el.innerHTML = '';
+  (room?.extras || []).forEach((ex, i) => {
+    const row = document.createElement('div');
+    row.className = 'lr';
+    row.innerHTML = `<span class="lr-ic">${esc(ex.icon)}</span><div class="lr-info"><div class="lr-name">${esc(ex.label)}</div><div class="lr-ent">${esc(ex.entity)}</div></div><button class="btn btn-s btn-xs" onclick="openExtraModal(${i})">Edit</button>`;
+    el.appendChild(row);
+  });
+}
+
+function openExtraModal(i) {
+  _editExtraIdx = i;
+  const room = L.rooms.find(r => r.id === _editRoomId);
+  const ex = i >= 0 ? room.extras[i] : { label: '', icon: '', entity: '' };
+  document.getElementById('m-extra-title').textContent = i >= 0 ? 'Edit Extra Entity' : 'Add Extra Entity';
+  document.getElementById('ex-label').value = ex.label;
+  document.getElementById('ex-icon').value = ex.icon;
+  document.getElementById('ex-ent').value = ex.entity;
+  document.getElementById('ex-del-btn').style.display = i >= 0 ? '' : 'none';
+  openM('m-extra');
+}
+
+function saveExtra() {
+  const room = L.rooms.find(r => r.id === _editRoomId);
+  if (!room) return;
+  const ex = {
+    id: _editExtraIdx >= 0 ? room.extras[_editExtraIdx].id : 'ex_' + Date.now().toString(36),
+    label: document.getElementById('ex-label').value.trim(),
+    icon: document.getElementById('ex-icon').value.trim(),
+    entity: document.getElementById('ex-ent').value.trim(),
+  };
+  if (!ex.label || !ex.entity) return;
+  if (_editExtraIdx >= 0) room.extras[_editExtraIdx] = ex;
+  else room.extras.push(ex);
+  renderRmExtras(); dirty(); closeM('m-extra');
+}
+
+function deleteExtra() {
+  const room = L.rooms.find(r => r.id === _editRoomId);
+  if (room) { room.extras.splice(_editExtraIdx, 1); renderRmExtras(); dirty(); }
+  closeM('m-extra');
+}
+
+function saveRoom() {
+  const room = L.rooms.find(r => r.id === _editRoomId);
+  if (!room) return;
+  room.name = document.getElementById('rm-name').value.trim() || room.name;
+  room.icon = document.getElementById('rm-icon').value.trim() || room.icon;
+  const newId = document.getElementById('rm-id').value.trim().toLowerCase().replace(/\s+/g, '_');
+  if (newId && newId !== room.id && !L.rooms.find(r => r.id === newId)) room.id = newId;
+  room.ac = document.getElementById('rm-ac').value.trim() || undefined;
+  room.tv = document.getElementById('rm-tv').value.trim() || undefined;
+  const sel = document.querySelector('#clr-grid .clr-sw.sel');
+  if (sel) room.color = sel.title;
+  dirty(); renderRooms(); closeM('m-room');
+}
+
+function deleteRoom() {
+  const room = L.rooms.find(r => r.id === _editRoomId);
+  if (!confirm(`Delete room "${room?.name}"?`)) return;
+  L.rooms = L.rooms.filter(r => r.id !== _editRoomId);
+  L.rooms.forEach((r, i) => r.order = i);
+  dirty(); renderRooms(); closeM('m-room');
+}
+
+// ── LAYOUT / BREAKPOINTS ──────────────────────────────────────────────────────
+function renderBreakpoints() {
+  const tb = document.getElementById('bp-body');
+  tb.innerHTML = '';
+  L.grid.breakpoints.forEach((bp, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="number" value="${bp.minWidth}" onchange="L.grid.breakpoints[${i}].minWidth=+this.value;dirty()"/></td>
+      <td><input type="number" value="${bp.cols}" min="1" max="8" onchange="L.grid.breakpoints[${i}].cols=+this.value;dirty()"/></td>
+      <td><button class="btn btn-d btn-xs" onclick="rmBp(${i})">×</button></td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+
+function addBp() { L.grid.breakpoints.push({ minWidth: 0, cols: 2 }); dirty(); renderBreakpoints(); }
+function rmBp(i) { L.grid.breakpoints.splice(i, 1); dirty(); renderBreakpoints(); }
+
+function renderTabs() {
+  const el = document.getElementById('tabs-cfg');
+  el.innerHTML = '';
+  TABS.forEach(key => {
+    const tab = L.tabs[key];
+    const row = document.createElement('div');
+    row.className = 'edit-row';
+    row.innerHTML = `
+      <div class="tog ${tab.visible ? 'on' : ''}" onclick="toggleTab('${key}',this)"></div>
+      <span style="flex:0 0 80px;font-size:12px;font-weight:600;color:var(--muted2)">${esc(TAB_LBL[key])}</span>
+      <input value="${esc(tab.name)}" style="flex:1" placeholder="${esc(TAB_LBL[key])}"
+        onchange="L.tabs['${key}'].name=this.value;dirty()"/>
+    `;
+    el.appendChild(row);
+  });
+}
+
+function toggleTab(key, el) {
+  L.tabs[key].visible = !L.tabs[key].visible;
+  el.className = 'tog ' + (L.tabs[key].visible ? 'on' : '');
+  dirty();
+}
+
+// ── SECURITY ──────────────────────────────────────────────────────────────────
+function renderSecurity() {
+  document.getElementById('i-alarm').value = L.security.alarm || '';
+  document.getElementById('i-nas').value = L.security.nasEntity || '';
+  document.getElementById('i-lock').value = L.security.lock?.entity || '';
+  document.getElementById('i-lockbat').value = L.security.lock?.batteryEntity || '';
+  renderSensors();
+  renderCameras();
+}
+
+function syncSecFields() {
+  L.security.alarm = document.getElementById('i-alarm').value.trim();
+  L.security.nasEntity = document.getElementById('i-nas').value.trim() || undefined;
+  const le = document.getElementById('i-lock').value.trim();
+  const lb = document.getElementById('i-lockbat').value.trim();
+  L.security.lock = le ? { entity: le, ...(lb ? { batteryEntity: lb } : {}) } : undefined;
+}
+
+function renderSensors() {
+  const el = document.getElementById('sensors-list');
+  el.innerHTML = '';
+  (L.security.sensors || []).forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'lr';
+    row.innerHTML = `<span class="lr-ic">${esc(s.icon)}</span><div class="lr-info"><div class="lr-name">${esc(s.label)}</div><div class="lr-ent">${esc(s.entity)}</div></div><span style="font-size:11px;color:var(--muted2);flex-shrink:0">${esc(s.okLabel)}/${esc(s.warnLabel)}</span><button class="btn btn-s btn-xs" onclick="openSensorModal(${i})">Edit</button>`;
+    el.appendChild(row);
+  });
+}
+
+function openSensorModal(i) {
+  _editSensorIdx = i;
+  const s = i >= 0 ? L.security.sensors[i] : { label: '', icon: '🚨', entity: '', okState: 'off', okLabel: 'OK', warnLabel: 'Alert' };
+  document.getElementById('m-sensor-title').textContent = i >= 0 ? 'Edit Sensor' : 'Add Sensor';
+  document.getElementById('sn-label').value = s.label;
+  document.getElementById('sn-icon').value = s.icon;
+  document.getElementById('sn-ent').value = s.entity;
+  document.getElementById('sn-okst').value = s.okState;
+  document.getElementById('sn-oklbl').value = s.okLabel;
+  document.getElementById('sn-warn').value = s.warnLabel;
+  document.getElementById('sn-del-btn').style.display = i >= 0 ? '' : 'none';
+  openM('m-sensor');
+}
+
+function saveSensor() {
+  if (!L.security.sensors) L.security.sensors = [];
+  const s = {
+    id: _editSensorIdx >= 0 ? L.security.sensors[_editSensorIdx].id : 's_' + Date.now().toString(36),
+    label: document.getElementById('sn-label').value.trim(),
+    icon: document.getElementById('sn-icon').value.trim(),
+    entity: document.getElementById('sn-ent').value.trim(),
+    okState: document.getElementById('sn-okst').value.trim(),
+    okLabel: document.getElementById('sn-oklbl').value.trim(),
+    warnLabel: document.getElementById('sn-warn').value.trim(),
+  };
+  if (!s.label || !s.entity) return;
+  if (_editSensorIdx >= 0) L.security.sensors[_editSensorIdx] = s;
+  else L.security.sensors.push(s);
+  dirty(); renderSensors(); closeM('m-sensor');
+}
+
+function deleteSensor() {
+  L.security.sensors.splice(_editSensorIdx, 1);
+  dirty(); renderSensors(); closeM('m-sensor');
+}
+
+function renderCameras() {
+  const el = document.getElementById('cameras-list');
+  el.innerHTML = '';
+  (L.security.cameras || []).forEach((c, i) => {
+    const row = document.createElement('div');
+    row.className = 'lr';
+    row.innerHTML = `<span class="lr-ic">📷</span><div class="lr-info"><div class="lr-name">${esc(c.label)}</div><div class="lr-ent">${esc(c.entity)}</div></div><button class="btn btn-s btn-xs" onclick="openCameraModal(${i})">Edit</button>`;
+    el.appendChild(row);
+  });
+}
+
+function openCameraModal(i) {
+  _editCamIdx = i;
+  const c = i >= 0 ? L.security.cameras[i] : { label: '', entity: '' };
+  document.getElementById('m-cam-title').textContent = i >= 0 ? 'Edit Camera' : 'Add Camera';
+  document.getElementById('cam-label').value = c.label;
+  document.getElementById('cam-ent').value = c.entity;
+  document.getElementById('cam-del-btn').style.display = i >= 0 ? '' : 'none';
+  openM('m-camera');
+}
+
+function saveCamera() {
+  if (!L.security.cameras) L.security.cameras = [];
+  const c = {
+    id: _editCamIdx >= 0 ? L.security.cameras[_editCamIdx].id : 'cam_' + Date.now().toString(36),
+    label: document.getElementById('cam-label').value.trim(),
+    entity: document.getElementById('cam-ent').value.trim(),
+  };
+  if (!c.label || !c.entity) return;
+  if (_editCamIdx >= 0) L.security.cameras[_editCamIdx] = c;
+  else L.security.cameras.push(c);
+  dirty(); renderCameras(); closeM('m-camera');
+}
+
+function deleteCamera() {
+  L.security.cameras.splice(_editCamIdx, 1);
+  dirty(); renderCameras(); closeM('m-camera');
+}
+
+// ── MEDIA ─────────────────────────────────────────────────────────────────────
+function renderMedia() {
+  document.getElementById('i-tvremote').value = L.media.tvRemote || '';
+  document.getElementById('i-radio').value = L.media.radioBoolean || '';
+  renderPlayers();
+  renderApps();
+}
+
+function syncMediaFields() {
+  L.media.tvRemote = document.getElementById('i-tvremote').value.trim() || undefined;
+  L.media.radioBoolean = document.getElementById('i-radio').value.trim() || undefined;
+}
+
+function renderPlayers() {
+  const el = document.getElementById('players-list');
+  el.innerHTML = '';
+  (L.media.players || []).forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'lr';
+    row.innerHTML = `<span class="lr-ic">${esc(p.icon)}</span><div class="lr-info"><div class="lr-name">${esc(p.label)}</div><div class="lr-ent">${esc(p.entity)}</div></div><button class="btn btn-s btn-xs" onclick="openPlayerModal(${i})">Edit</button>`;
+    el.appendChild(row);
+  });
+}
+
+function openPlayerModal(i) {
+  _editPlIdx = i;
+  const p = i >= 0 ? L.media.players[i] : { label: '', entity: '', icon: '📺' };
+  document.getElementById('m-pl-title').textContent = i >= 0 ? 'Edit Player' : 'Add Player';
+  document.getElementById('pl-label').value = p.label;
+  document.getElementById('pl-ent').value = p.entity;
+  document.getElementById('pl-icon').value = p.icon;
+  document.getElementById('pl-del-btn').style.display = i >= 0 ? '' : 'none';
+  openM('m-player');
+}
+
+function savePlayer() {
+  if (!L.media.players) L.media.players = [];
+  const p = {
+    id: _editPlIdx >= 0 ? L.media.players[_editPlIdx].id : 'pl_' + Date.now().toString(36),
+    label: document.getElementById('pl-label').value.trim(),
+    entity: document.getElementById('pl-ent').value.trim(),
+    icon: document.getElementById('pl-icon').value.trim(),
+  };
+  if (!p.label || !p.entity) return;
+  if (_editPlIdx >= 0) L.media.players[_editPlIdx] = p;
+  else L.media.players.push(p);
+  dirty(); renderPlayers(); closeM('m-player');
+}
+
+function deletePlayer() {
+  L.media.players.splice(_editPlIdx, 1);
+  dirty(); renderPlayers(); closeM('m-player');
+}
+
+function renderApps() {
+  const el = document.getElementById('apps-list');
+  el.innerHTML = '';
+  (L.media.apps || []).forEach((a, i) => {
+    const row = document.createElement('div');
+    row.className = 'lr';
+    const ico = a.icon && a.icon.length <= 2 ? esc(a.icon) : '▶️';
+    row.innerHTML = `<span class="lr-ic">${ico}</span><div class="lr-info"><div class="lr-name">${esc(a.label)}</div><div class="lr-ent">${esc(a.entity)} · ${esc(a.actionType)}</div></div><button class="btn btn-s btn-xs" onclick="openAppModal(${i})">Edit</button>`;
+    el.appendChild(row);
+  });
+}
+
+function openAppModal(i) {
+  _editAppIdx = i;
+  const a = i >= 0 ? L.media.apps[i] : { label: '', icon: '', entity: '', actionType: 'input_button' };
+  document.getElementById('m-app-title').textContent = i >= 0 ? 'Edit App' : 'Add App';
+  document.getElementById('ap-label').value = a.label;
+  document.getElementById('ap-icon').value = a.icon;
+  document.getElementById('ap-ent').value = a.entity;
+  document.getElementById('ap-type').value = a.actionType;
+  document.getElementById('ap-del-btn').style.display = i >= 0 ? '' : 'none';
+  openM('m-app');
+}
+
+function saveApp() {
+  if (!L.media.apps) L.media.apps = [];
+  const a = {
+    id: _editAppIdx >= 0 ? L.media.apps[_editAppIdx].id : 'ap_' + Date.now().toString(36),
+    label: document.getElementById('ap-label').value.trim(),
+    icon: document.getElementById('ap-icon').value.trim(),
+    entity: document.getElementById('ap-ent').value.trim(),
+    actionType: document.getElementById('ap-type').value,
+  };
+  if (!a.label || !a.entity) return;
+  if (_editAppIdx >= 0) L.media.apps[_editAppIdx] = a;
+  else L.media.apps.push(a);
+  dirty(); renderApps(); closeM('m-app');
+}
+
+function deleteApp() {
+  L.media.apps.splice(_editAppIdx, 1);
+  dirty(); renderApps(); closeM('m-app');
+}
+
+// ── STATUS & CHIPS ────────────────────────────────────────────────────────────
+function renderStatus() {
+  renderStTags('lights');
+  renderStTags('acs');
+  document.getElementById('i-water').value = L.status.waterFilter || '';
+  renderPresence();
+  renderChips();
+}
+
+function syncStatusFields() {
+  L.status.waterFilter = document.getElementById('i-water').value.trim() || undefined;
+  const de = document.getElementById('chip-door-ent')?.value.trim();
+  const dl = document.getElementById('chip-door-lbl')?.value.trim();
+  const we = document.getElementById('chip-weather-ent')?.value.trim();
+  if (de !== undefined && L.chips?.door) L.chips.door.entity = de;
+  if (dl !== undefined && L.chips?.door) L.chips.door.label = dl;
+  if (we !== undefined && L.chips?.weather) L.chips.weather.entity = we;
+}
+
+function renderStTags(type) {
+  const el = document.getElementById('st-' + type + '-tags');
+  el.innerHTML = '';
+  (L.status[type] || []).forEach((e, i) => {
+    const t = document.createElement('div');
+    t.className = 'tag';
+    t.innerHTML = `${esc(e)}<span class="x" onclick="rmStEnt('${type}',${i})">×</span>`;
+    el.appendChild(t);
+  });
+}
+
+function addStEnt(type) {
+  const inp = document.getElementById('st-' + type + '-inp');
+  const val = inp.value.trim();
+  if (!val) return;
+  if (!L.status[type]) L.status[type] = [];
+  if (!L.status[type].includes(val)) { L.status[type].push(val); renderStTags(type); dirty(); }
+  inp.value = '';
+}
+
+function rmStEnt(type, i) {
+  L.status[type].splice(i, 1);
+  renderStTags(type); dirty();
+}
+
+function renderPresence() {
+  const el = document.getElementById('presence-list');
+  el.innerHTML = '';
+  (L.status.presence || []).forEach((entity, i) => {
+    const person = (L.chips?.presence?.persons || []).find(p => p.entity === entity);
+    const row = document.createElement('div');
+    row.className = 'lr';
+    row.style.marginBottom = '0';
+    row.innerHTML = `<span class="lr-ic">👤</span><div class="lr-info"><div class="lr-name">${esc(person?.name || entity)}</div><div class="lr-ent">${esc(entity)}</div></div><button class="btn btn-d btn-xs" onclick="removePerson(${i})">×</button>`;
+    el.appendChild(row);
+  });
+}
+
+function addPerson() {
+  const entity = prompt('Person entity ID (e.g. person.raed):');
+  if (!entity?.trim()) return;
+  const name = prompt('Display name (e.g. Raed):') || entity;
+  if (!L.status.presence) L.status.presence = [];
+  if (!L.status.presence.includes(entity.trim())) {
+    L.status.presence.push(entity.trim());
+    if (!L.chips) L.chips = {};
+    if (!L.chips.presence) L.chips.presence = { visible: true, persons: [] };
+    L.chips.presence.persons.push({ entity: entity.trim(), name: name.trim() });
+    dirty(); renderPresence();
+  }
+}
+
+function removePerson(i) {
+  const entity = L.status.presence[i];
+  L.status.presence.splice(i, 1);
+  if (L.chips?.presence?.persons) L.chips.presence.persons = L.chips.presence.persons.filter(p => p.entity !== entity);
+  dirty(); renderPresence();
+}
+
+function renderChips() {
+  const chips = L.chips || {};
+  const el = document.getElementById('chips-cfg');
+  const rows = [
+    { k: 'alarm',    ico: '🔔', lbl: 'Alarm chip' },
+    { k: 'door',     ico: '🚪', lbl: 'Door chip' },
+    { k: 'weather',  ico: '🌤️', lbl: 'Weather chip' },
+    { k: 'prayer',   ico: '🕌', lbl: 'Prayer times chip' },
+    { k: 'presence', ico: '👥', lbl: 'Presence chip' },
+  ];
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      ${rows.map(({ k, ico, lbl }) => `
+        <div class="edit-row">
+          <div class="tog ${chips[k]?.visible ? 'on' : ''}" onclick="toggleChip('${k}',this)"></div>
+          <span style="font-size:16px;width:24px;text-align:center">${ico}</span>
+          <span style="flex:1;font-size:13px;font-weight:500">${lbl}</span>
+        </div>`).join('')}
+    </div>
+    <div class="row2">
+      <div><label>Door Entity</label><input id="chip-door-ent" value="${esc(chips.door?.entity || '')}" placeholder="binary_sensor.door" oninput="dirty()"/></div>
+      <div><label>Door Label</label><input id="chip-door-lbl" value="${esc(chips.door?.label || 'Door')}" oninput="dirty()"/></div>
+    </div>
+    <div class="field"><label>Weather Entity</label><input id="chip-weather-ent" value="${esc(chips.weather?.entity || '')}" placeholder="weather.forecast_home" oninput="dirty()"/></div>
+  `;
+}
+
+function toggleChip(key, el) {
+  if (!L.chips) L.chips = {};
+  if (!L.chips[key]) L.chips[key] = {};
+  L.chips[key].visible = !L.chips[key].visible;
+  el.className = 'tog ' + (L.chips[key].visible ? 'on' : '');
+  dirty();
+}
+
+// ── USERS ─────────────────────────────────────────────────────────────────────
+function renderUsers() {
+  const el = document.getElementById('users-list');
+  el.innerHTML = '';
+  const users = L.users || [];
+  if (!users.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:10px 0">No sub-accounts — only the main admin account exists.</div>';
+    return;
+  }
+  users.forEach(u => {
+    const row = document.createElement('div');
+    row.className = 'user-row';
+    row.innerHTML = `
+      <div class="u-av">${esc(u.name[0].toUpperCase())}</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600">${esc(u.name)}</div>
+        <div style="font-size:11px;color:var(--muted2);margin-top:2px">${u.role === 'admin' ? '⭐ Admin' : '👤 User'}</div>
+      </div>
+      <span class="badge ${u.role === 'admin' ? 'ba' : 'bu'}">${u.allowedRooms ? u.allowedRooms.length + ' rooms' : 'All access'}</span>
+      <button class="btn btn-s btn-sm" onclick="openUserModal('${u.id}')">Edit</button>
+    `;
+    el.appendChild(row);
+  });
+}
+
+function openUserModal(userId) {
+  _editUserId = userId;
+  const isNew = !userId;
+  const user = isNew ? null : (L.users || []).find(u => u.id === userId);
+  document.getElementById('m-user-title').textContent = isNew ? 'Add User' : 'Edit User';
+  document.getElementById('u-name').value = user?.name || '';
+  document.getElementById('u-name').disabled = !isNew;
+  document.getElementById('u-role').value = user?.role || 'user';
+  document.getElementById('u-pwd').value = '';
+  document.getElementById('u-pwd-hint').style.display = isNew ? 'none' : '';
+  document.getElementById('u-del-btn').style.display = isNew ? 'none' : '';
+  document.getElementById('u-err').className = 'err';
+
+  const rg = document.getElementById('u-rooms');
+  rg.innerHTML = '';
+  [...L.rooms].sort((a, b) => a.order - b.order).forEach(room => {
+    const checked = !user?.allowedRooms || user.allowedRooms.includes(room.id);
+    const div = document.createElement('div');
+    div.className = 'chk-item';
+    div.innerHTML = `<input type="checkbox" value="${room.id}" ${checked ? 'checked' : ''}/><span>${esc(room.icon)} ${esc(room.name)}</span>`;
+    div.querySelector('input').onchange = () => {};
+    rg.appendChild(div);
+  });
+
+  const tg = document.getElementById('u-tabs');
+  tg.innerHTML = '';
+  TABS.forEach(key => {
+    const checked = !user?.allowedTabs || user.allowedTabs.includes(key);
+    const div = document.createElement('div');
+    div.className = 'chk-item';
+    div.innerHTML = `<input type="checkbox" value="${key}" ${checked ? 'checked' : ''}/><span>${esc(L.tabs[key]?.name || TAB_LBL[key])}</span>`;
+    tg.appendChild(div);
+  });
+
+  openM('m-user');
+}
+
+async function saveUser() {
+  const errEl = document.getElementById('u-err');
+  errEl.className = 'err';
+  const name = document.getElementById('u-name').value.trim();
+  const pwd = document.getElementById('u-pwd').value;
+  const role = document.getElementById('u-role').value;
+
+  const roomChecks = [...document.querySelectorAll('#u-rooms input[type=checkbox]')];
+  const tabChecks = [...document.querySelectorAll('#u-tabs input[type=checkbox]')];
+  const checkedRooms = roomChecks.filter(c => c.checked).map(c => c.value);
+  const checkedTabs = tabChecks.filter(c => c.checked).map(c => c.value);
+  const allRooms = roomChecks.every(c => c.checked);
+  const allTabs = tabChecks.every(c => c.checked);
+
+  const body = { role, allowedRooms: allRooms ? null : checkedRooms, allowedTabs: allTabs ? null : checkedTabs };
+
+  try {
+    let res;
+    if (!_editUserId) {
+      if (!name) { errEl.textContent = 'Name required'; errEl.className = 'err show'; return; }
+      if (!pwd || pwd.length < 8) { errEl.textContent = 'Password must be ≥ 8 characters'; errEl.className = 'err show'; return; }
+      res = await api('POST', '/api/users', { ...body, name, password: pwd });
+    } else {
+      if (pwd && pwd.length < 8) { errEl.textContent = 'Password must be ≥ 8 characters'; errEl.className = 'err show'; return; }
+      res = await api('PATCH', '/api/users/' + _editUserId, { ...body, ...(pwd ? { password: pwd } : {}) });
+    }
+    if (res.error) { errEl.textContent = res.error; errEl.className = 'err show'; return; }
+    toast(_editUserId ? 'User updated' : 'User created');
+    closeM('m-user');
+    const fresh = await api('GET', '/api/layout');
+    L.users = fresh.users;
+    renderUsers();
+  } catch { errEl.textContent = 'Request failed'; errEl.className = 'err show'; }
+}
+
+async function deleteUser() {
+  const user = (L.users || []).find(u => u.id === _editUserId);
+  if (!confirm(`Delete user "${user?.name}"?`)) return;
+  try {
+    await api('DELETE', '/api/users/' + _editUserId);
+    toast('User deleted');
+    closeM('m-user');
+    L.users = L.users.filter(u => u.id !== _editUserId);
+    renderUsers();
+  } catch { toast('Delete failed', false); }
+}
+
+// ── SCANNER ───────────────────────────────────────────────────────────────────
+async function loadScanner() {
+  _scanEnts = null;
+  _scanDomain = '';
+  document.getElementById('ent-grid').innerHTML = '<div style="color:var(--muted2);padding:20px 0"><span class="spin"></span>&nbsp; Loading entities…</div>';
+  document.getElementById('dom-pills').innerHTML = '';
+  try {
+    _scanEnts = await api('GET', '/api/ha/entities');
+    if (_scanEnts.error) throw new Error(_scanEnts.error);
+    buildDomPills();
+    filterScan();
+  } catch (e) {
+    document.getElementById('ent-grid').innerHTML = `<div style="color:#fca5a5;padding:20px 0">Failed: ${esc(e.message)}</div>`;
+  }
+}
+
+function buildDomPills() {
+  const domains = [...new Set(_scanEnts.map(e => e.entity_id.split('.')[0]))].sort();
+  const el = document.getElementById('dom-pills');
+  el.innerHTML = '';
+  const all = makePill('All', true, () => { _scanDomain = ''; el.querySelectorAll('.dpill').forEach(p => p.classList.remove('active')); all.classList.add('active'); filterScan(); });
+  el.appendChild(all);
+  domains.forEach(d => {
+    const p = makePill(d, false, () => { _scanDomain = d; el.querySelectorAll('.dpill').forEach(p => p.classList.remove('active')); p.classList.add('active'); filterScan(); });
+    el.appendChild(p);
+  });
+}
+
+function makePill(text, active, fn) {
+  const p = document.createElement('div');
+  p.className = 'dpill' + (active ? ' active' : '');
+  p.textContent = text;
+  p.onclick = fn;
+  return p;
+}
+
+function filterScan() {
+  if (!_scanEnts) return;
+  const q = document.getElementById('scan-q').value.toLowerCase();
+  let filtered = _scanEnts;
+  if (_scanDomain) filtered = filtered.filter(e => e.entity_id.startsWith(_scanDomain + '.'));
+  if (q) filtered = filtered.filter(e => e.entity_id.toLowerCase().includes(q) || (e.attributes?.friendly_name || '').toLowerCase().includes(q));
+  document.getElementById('ent-cnt').textContent = `${filtered.length} entities`;
+  const grid = document.getElementById('ent-grid');
+  grid.innerHTML = '';
+  filtered.slice(0, 200).forEach(e => {
+    const card = document.createElement('div');
+    card.className = 'ent-card';
+    const nm = e.attributes?.friendly_name || '';
+    card.innerHTML = `<div class="ent-id">${esc(e.entity_id)}</div>${nm ? `<div class="ent-nm">${esc(nm)}</div>` : ''}<div class="ent-st">State: ${esc(String(e.state))}</div>`;
+    card.onclick = () => openAssignModal(e);
+    grid.appendChild(card);
+  });
+  if (filtered.length > 200) {
+    const more = document.createElement('div');
+    more.style.cssText = 'grid-column:1/-1;color:var(--muted);font-size:12px;padding:8px 0;text-align:center';
+    more.textContent = `… and ${filtered.length - 200} more. Use search or domain filter to narrow down.`;
+    grid.appendChild(more);
+  }
+}
+
+function openAssignModal(entity) {
+  _asgnEnt = entity;
+  document.getElementById('asgn-id').textContent = entity.entity_id;
+  document.getElementById('asgn-nm').textContent = entity.attributes?.friendly_name || '';
+  document.getElementById('asgn-st').textContent = 'State: ' + String(entity.state);
+
+  const rg = document.getElementById('asgn-rooms');
+  rg.innerHTML = '';
+  [...L.rooms].sort((a, b) => a.order - b.order).forEach(room => {
+    [
+      { v: `room_${room.id}__light`, t: `${room.name} → Lights` },
+      { v: `room_${room.id}__ac`,    t: `${room.name} → AC` },
+      { v: `room_${room.id}__tv`,    t: `${room.name} → TV` },
+    ].forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o.v; opt.textContent = o.t;
+      rg.appendChild(opt);
+    });
+  });
+
+  document.getElementById('asgn-dest').value = '';
+  openM('m-assign');
+}
+
+function doAssign() {
+  const dest = document.getElementById('asgn-dest').value;
+  if (!dest || !_asgnEnt) return;
+  const eid = _asgnEnt.entity_id;
+  const nm = _asgnEnt.attributes?.friendly_name || eid;
+
+  if (dest.startsWith('room_')) {
+    const parts = dest.split('__');
+    const field = parts[1];
+    const roomId = dest.slice('room_'.length, dest.indexOf('__'));
+    const room = L.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    if (field === 'light') { if (!room.lights.includes(eid)) room.lights.push(eid); }
+    else if (field === 'ac') room.ac = eid;
+    else if (field === 'tv') room.tv = eid;
+  } else if (dest === 'status_lights') {
+    if (!L.status.lights) L.status.lights = [];
+    if (!L.status.lights.includes(eid)) L.status.lights.push(eid);
+  } else if (dest === 'status_acs') {
+    if (!L.status.acs) L.status.acs = [];
+    if (!L.status.acs.includes(eid)) L.status.acs.push(eid);
+  } else if (dest === 'sec_alarm') {
+    L.security.alarm = eid;
+  } else if (dest === 'sec_sensor') {
+    if (!L.security.sensors) L.security.sensors = [];
+    L.security.sensors.push({ id: 's_' + Date.now().toString(36), label: nm, icon: '🚨', entity: eid, okState: 'off', okLabel: 'OK', warnLabel: 'Alert' });
+  } else if (dest === 'sec_camera') {
+    if (!L.security.cameras) L.security.cameras = [];
+    L.security.cameras.push({ id: 'cam_' + Date.now().toString(36), label: nm, entity: eid });
+  } else if (dest === 'media_player') {
+    if (!L.media.players) L.media.players = [];
+    L.media.players.push({ id: 'pl_' + Date.now().toString(36), label: nm, entity: eid, icon: '📺' });
+  } else if (dest === 'media_tvremote') {
+    L.media.tvRemote = eid;
+  } else if (dest === 'media_radio') {
+    L.media.radioBoolean = eid;
+  }
+
+  syncSecFields(); syncMediaFields(); syncStatusFields();
+  dirty();
+  renderAll();
+  toast('Assigned → ' + dest.replace(/_+/g, ' '));
+  closeM('m-assign');
+}
+
+// ── SAVE ──────────────────────────────────────────────────────────────────────
+async function saveAll() {
+  syncSecFields();
+  syncMediaFields();
+  syncStatusFields();
+
+  const btn = document.getElementById('save-btn');
+  const txt = document.getElementById('save-txt');
+  btn.disabled = true;
+  txt.textContent = 'Saving…';
+  try {
+    const res = await api('PUT', '/api/layout', L);
+    if (res.ok) { toast('Saved ✓'); clearDirty(); }
+    else toast('Save failed: ' + (res.error || 'unknown error'), false);
+  } catch { toast('Save failed', false); }
+  finally { btn.disabled = false; txt.textContent = 'Save Changes'; }
+}
+
+// ── MODAL HELPERS ─────────────────────────────────────────────────────────────
+function openM(id) {
+  document.getElementById(id).classList.add('open');
+  document.addEventListener('keydown', onEscKey);
+}
+function closeM(id) {
+  document.getElementById(id).classList.remove('open');
+  document.removeEventListener('keydown', onEscKey);
+}
+function onEscKey(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.backdrop.open').forEach(m => m.classList.remove('open'));
+    document.removeEventListener('keydown', onEscKey);
+  }
+}
+document.querySelectorAll('.backdrop').forEach(mb => {
+  mb.addEventListener('click', e => { if (e.target === mb) mb.classList.remove('open'); });
+});
+
+// ── MISC ──────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function logout() { sessionStorage.removeItem('ha_dash_token'); location.href = '/login'; }
+</script>
+</body>
+</html>

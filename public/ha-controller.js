@@ -1,181 +1,247 @@
-import { connect, callHA, getState, getAttr } from './ha-bridge.js';
+import { connect, callHA, getState } from './ha-bridge.js';
 
-// ── Expose HA actions to global scope (used by onclick attrs & regular script) ──
+// ── Global HA actions ──────────────────────────────────────────────────────
 window.callHA        = callHA;
-window.haToggle      = (e) => callHA('homeassistant','toggle', e);
-window.haSwitchOn    = (e) => callHA('switch','turn_on', e);
-window.haSwitchOff   = (e) => callHA('switch','turn_off', e);
-window.haClimateTemp = (e,t)=> callHA('climate','set_temperature', e, {temperature:t});
-window.haClimateMode = (e,m)=> callHA('climate','set_hvac_mode',   e, {hvac_mode:m});
-window.haScript      = (e)  => callHA('script','turn_on', e);
-window.haInputBtn    = (e)  => callHA('input_button','press', e);
-window.haBoolToggle  = (e)  => callHA('input_boolean','toggle', e);
+window.haToggle      = (e)   => callHA('homeassistant','toggle', e);
+window.haSwitchOn    = (e)   => callHA('switch','turn_on', e);
+window.haSwitchOff   = (e)   => callHA('switch','turn_off', e);
+window.haClimateTemp = (e,t) => callHA('climate','set_temperature', e, {temperature:t});
+window.haClimateMode = (e,m) => callHA('climate','set_hvac_mode',   e, {hvac_mode:m});
+window.haScript      = (e)   => callHA('script','turn_on', e);
+window.haInputBtn    = (e)   => callHA('input_button','press', e);
+window.haBoolToggle  = (e)   => callHA('input_boolean','toggle', e);
 window.haAlarm       = (a, code) => callHA('alarm_control_panel', a, 'alarm_control_panel.alarmo', code ? {code} : {});
 window.haMediaCmd    = (e,a,x={}) => callHA('media_player', a, e, x);
 
-// Track when media enters paused/idle — hide card after 5 min
 const _mediaPauseTimers = new Map();
 
-// ── Connect ──
-connect();
+// ── Boot: load layout then connect ─────────────────────────────────────────
+const _token = sessionStorage.getItem('ha_dash_token');
+if (!_token) { window.location.href = '/login'; }
 
-// ── Bind interactive elements after DOM ready ──
-document.addEventListener('DOMContentLoaded', bindButtons);
-if (document.readyState !== 'loading') bindButtons();
+let _layout = null;
 
-function bindButtons() {
-  // Room card quick-buttons (stop propagation + call HA)
-  const roomMap = {
-    'r-living': { light:'switch.livingroomswitchgroup', ac:'climate.1e05049f' },
-    'r-bed':    { light:'switch.masterroom_group_switch', ac:'climate.1e050116' },
-    'r-kit':    { light:'switch.kitchen_group_switch' },
-    'r-office': { light:'switch.office_group_swithces',  ac:'climate.1e51b62f' },
-    'r-baby':   { light:'switch.baby_room' },
-    'r-guest':  { light:'switch.guest_room_switches',    acOn:'script.guestac_on', acOff:'script.guestac' },
-    'r-hall':   { light:'switch.hallway_switches' },
-    'r-laundry':{ light:'switch.laundry_light_left',   ac:'climate.1e51bb2c' },
-  };
-  const _btnColorMap = { 'r-living':'rbtn-b','r-bed':'rbtn-p','r-kit':'rbtn-a','r-office':'rbtn-c','r-baby':'rbtn-r','r-guest':'rbtn-g','r-hall':'rbtn-b','r-laundry':'rbtn-r' };
-  document.querySelectorAll('.room').forEach(room => {
-    const cls = [...room.classList].find(c => roomMap[c]);
-    if (!cls) return;
-    const map = roomMap[cls];
-    const colorCls = _btnColorMap[cls] ?? 'rbtn-b';
-    const btns = room.querySelectorAll('.rbtn');
-    btns.forEach(btn => {
-      btn.onclick = (e) => {
+async function boot() {
+  try {
+    const r = await fetch('/api/layout', { headers: { Authorization: `Bearer ${_token}` } });
+    if (r.status === 401) { sessionStorage.removeItem('ha_dash_token'); window.location.href = '/login'; return; }
+    _layout = await r.json();
+    window.__layout = _layout;
+    applyLayout(_layout);
+    _maybeShowAdminChip();
+  } catch (e) {
+    console.error('[ha-controller] Could not load layout:', e);
+    _layout = null; // will use fallback statics
+  }
+  connect();
+}
+
+function _maybeShowAdminChip() {
+  try {
+    const payload = JSON.parse(atob(_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    if (payload.role !== 'admin') return;
+  } catch { return; }
+  const chips = document.getElementById('chips');
+  if (!chips) return;
+  const chip = document.createElement('a');
+  chip.href = '/admin';
+  chip.className = 'chip';
+  chip.style.cssText = 'border-color:rgba(91,141,238,.35);color:#93c5fd;text-decoration:none';
+  chip.title = 'Admin Panel';
+  chip.textContent = '⚙️ Admin';
+  const spacer = chips.querySelector('.chip-spacer');
+  if (spacer) chips.insertBefore(chip, spacer);
+  else chips.appendChild(chip);
+}
+
+// ── Apply layout to DOM ────────────────────────────────────────────────────
+function applyLayout(L) {
+  applyGridCols(L.grid);
+  applyTabNames(L.tabs);
+  renderRooms(L.rooms);
+  renderSensors(L.security?.sensors ?? []);
+  renderCameras(L.security?.cameras ?? []);
+  applyTabVisibility(L.tabs);
+  updateRadioToggle();
+}
+
+function applyGridCols(grid) {
+  if (!grid) return;
+  const rg = document.querySelector('.rg');
+  if (!rg) return;
+  // Build CSS from breakpoints
+  let css = '';
+  const bps = [...(grid.breakpoints ?? [])].sort((a,b) => a.minWidth - b.minWidth);
+  for (const bp of bps) {
+    if (bp.minWidth === 0) {
+      css += `.rg{grid-template-columns:repeat(${bp.cols},1fr);}`;
+    } else {
+      css += `@media(min-width:${bp.minWidth}px){.rg{grid-template-columns:repeat(${bp.cols},1fr);}}`;
+    }
+  }
+  let el = document.getElementById('layout-grid-style');
+  if (!el) { el = document.createElement('style'); el.id = 'layout-grid-style'; document.head.appendChild(el); }
+  el.textContent = css;
+}
+
+function applyTabNames(tabs) {
+  if (!tabs) return;
+  const map = { home:'ni-home', security:'ni-security', climate:'ni-climate', media:'ni-tv' };
+  const names = { home: tabs.home?.name, security: tabs.security?.name, climate: tabs.climate?.name, media: tabs.media?.name };
+  for (const [key, elId] of Object.entries(map)) {
+    const el = document.getElementById(elId);
+    if (!el || !names[key]) continue;
+    // preserve svg, replace text node
+    const svg = el.querySelector('svg');
+    el.textContent = names[key];
+    if (svg) el.prepend(svg);
+  }
+}
+
+function applyTabVisibility(tabs) {
+  if (!tabs) return;
+  const map = { home:'ni-home', security:'ni-security', climate:'ni-climate', media:'ni-tv' };
+  for (const [key, elId] of Object.entries(map)) {
+    const el = document.getElementById(elId);
+    if (el) el.style.display = tabs[key]?.visible === false ? 'none' : '';
+  }
+}
+
+const _COLOR_CSS = {
+  blue:   { bg:'rgba(22,50,100,.85),rgba(9,22,50,.9)',  border:'rgba(91,141,238,.4)',  shadow:'rgba(91,141,238,.12)',  glow:'rgba(91,141,238,.40)',  rico:'rgba(91,141,238,.25)',  rbtn:'rbtn-b', rb:'rb-on' },
+  purple: { bg:'rgba(70,30,110,.85),rgba(35,12,60,.9)', border:'rgba(167,139,250,.4)', shadow:'rgba(167,139,250,.12)', glow:'rgba(167,139,250,.35)', rico:'rgba(167,139,250,.25)', rbtn:'rbtn-p', rb:'rb-on' },
+  amber:  { bg:'rgba(90,50,10,.85),rgba(45,22,5,.9)',   border:'rgba(251,191,36,.4)',  shadow:'rgba(251,191,36,.10)',  glow:'rgba(251,191,36,.35)',  rico:'rgba(251,191,36,.22)',  rbtn:'rbtn-a', rb:'rb-on' },
+  cyan:   { bg:'rgba(8,80,90,.85),rgba(4,40,50,.9)',    border:'rgba(6,182,212,.4)',   shadow:'rgba(6,182,212,.12)',   glow:'rgba(6,182,212,.35)',   rico:'rgba(6,182,212,.22)',   rbtn:'rbtn-c', rb:'rb-on' },
+  pink:   { bg:'rgba(100,20,50,.75),rgba(55,8,28,.9)',  border:'rgba(251,113,133,.4)', shadow:'rgba(251,113,133,.10)', glow:'rgba(251,113,133,.35)', rico:'rgba(251,113,133,.22)', rbtn:'rbtn-r', rb:'rb-on' },
+  green:  { bg:'rgba(5,80,55,.85),rgba(3,40,28,.9)',    border:'rgba(16,185,129,.4)',  shadow:'rgba(16,185,129,.12)',  glow:'rgba(16,185,129,.40)',  rico:'rgba(16,185,129,.22)',  rbtn:'rbtn-g', rb:'rb-on' },
+  indigo: { bg:'rgba(30,30,55,.75),rgba(15,15,30,.9)',  border:'rgba(148,163,184,.3)', shadow:'',                     glow:'rgba(148,163,184,.20)', rico:'rgba(148,163,184,.18)', rbtn:'rbtn-off', rb:'rb-on' },
+  rose:   { bg:'rgba(90,20,20,.75),rgba(45,8,8,.9)',    border:'rgba(248,113,113,.35)',shadow:'rgba(248,113,113,.10)', glow:'rgba(248,113,113,.35)', rico:'rgba(248,113,113,.22)', rbtn:'rbtn-r', rb:'rb-on' },
+};
+
+function renderRooms(rooms) {
+  const rg = document.querySelector('.rg');
+  if (!rg) return;
+  const sorted = [...rooms].filter(r => r.visible).sort((a,b) => a.order - b.order);
+  rg.innerHTML = '';
+  for (const room of sorted) {
+    const c = _COLOR_CSS[room.color] ?? _COLOR_CSS.blue;
+    const haAc = !!room.ac;
+    const hasTv = !!room.tv;
+    const el = document.createElement('div');
+    el.className = `room r-${room.id}`;
+    el.style.cssText = `background:linear-gradient(148deg,${c.bg});border-color:${c.border};${c.shadow?`box-shadow:0 4px 28px ${c.shadow};`:''}`;
+    el.dataset.roomId = room.id;
+    el.innerHTML = `
+      <div class="glow" style="background:radial-gradient(circle,${c.glow},transparent);"></div>
+      <div class="rt">
+        <div class="rico" style="background:${c.rico};">${room.icon}</div>
+        <div class="rbadges">
+          ${haAc ? `<span class="rb rb-off" data-badge="ac">❄️ Off</span>` : ''}
+          <span class="rb rb-off">💡 Off</span>
+        </div>
+      </div>
+      <div>
+        <div class="rname">${room.name}</div>
+        <div class="rmeta">${room.lights.length} light${room.lights.length !== 1 ? 's' : ''}${haAc ? ' · AC' : ''}${hasTv ? ' · TV' : ''}</div>
+        <div class="rbtns">
+          <button class="rbtn rbtn-off" data-action="light" onclick="E(event)">💡 Off</button>
+          ${haAc ? `<button class="rbtn rbtn-off" data-action="ac" onclick="E(event)">❄️ Off</button>` : ''}
+          ${hasTv ? `<button class="rbtn rbtn-off" data-action="tv" onclick="E(event)">📺 TV</button>` : ''}
+        </div>
+      </div>`;
+    el.addEventListener('click', () => pop(room.id));
+    // bind quick buttons
+    el.querySelectorAll('.rbtn').forEach(btn => {
+      btn.addEventListener('click', e => {
         e.stopPropagation();
-        const cur = btn.textContent;
-        if (cur.includes('💡') && map.light) {
-          const goingOn = cur.includes('Off');
-          window.haToggle(map.light);
-          btn.textContent = goingOn ? '💡 On' : '💡 Off';
-          btn.className = `rbtn ${goingOn ? colorCls : 'rbtn-off'}`;
-          if (goingOn) room.classList.remove('r-off');
-        }
-        if (cur.includes('❄️') && map.ac) {
-          const acGoingOn = cur.includes('Off');
-          window.haClimateMode(map.ac, acGoingOn ? 'cool' : 'off');
-          btn.textContent = acGoingOn ? '❄️ Cool' : '❄️ Off';
-          btn.className = `rbtn ${acGoingOn ? colorCls : 'rbtn-off'}`;
-          if (acGoingOn) room.classList.remove('r-off');
-        }
-        if (cur.includes('❄️') && map.acOn)  window.haScript(map.acOn);
-        if (cur.includes('📺'))              window.haToggle('media_player.lg_webos_tv_uj670v');
-        if (cur.includes('🌙') && map.light) window.haToggle(map.light);
-      };
+        const action = btn.dataset.action;
+        if (action === 'light') window.haToggle(room.lights[0]);
+        else if (action === 'ac') window.haClimateMode(room.ac, btn.textContent.includes('Off') ? 'cool' : 'off');
+        else if (action === 'tv') window.haToggle(room.tv);
+      });
     });
-  });
-
-  // All Off button
-  const allOff = document.querySelector('.sh a[onclick]');
-  if (allOff) allOff.onclick = () => callHA('homeassistant','turn_off','switch.all_switches_group');
-
-  // Alarm arm buttons — open chip popup with optional PIN pad (handles Alarmo code-required configs)
-  document.querySelectorAll('.alm-btn').forEach(btn => {
-    if (btn.classList.contains('alm-away')) btn.onclick = () => {
-      window.alarmPopup?.();
-      window.almShowPin?.('alarm_arm_away', '🚨 Arm Away — press ✓ to confirm');
-    };
-    if (btn.classList.contains('alm-home')) btn.onclick = () => {
-      window.alarmPopup?.();
-      window.almShowPin?.('alarm_arm_home', '🏠 Arm Home — press ✓ to confirm');
-    };
-  });
-
-  // Climate page AC +/- and mode buttons
-  const acMap = [
-    { cls:'ac-lr', entity:'climate.1e05049f' },
-    { cls:'ac-bd', entity:'climate.1e050116' },
-    { cls:'ac-of', entity:'climate.1e51b62f' },
-    { cls:'ac-ln', entity:'climate.1e51bb2c' },
-  ];
-  acMap.forEach(({cls, entity}) => {
-    const card = document.querySelector(`.${cls}`);
-    if (!card) return;
-    const btns = card.querySelectorAll('.acbtn');
-    // order: − ❄️ 💨 +
-    btns[0]?.addEventListener('click', (e) => { e.stopPropagation();
-      const cur = parseInt(getState(entity)?.attributes?.temperature ?? 24);
-      window.haClimateTemp(entity, cur - 1); });
-    btns[1]?.addEventListener('click', (e) => { e.stopPropagation();
-      window.haClimateMode(entity, 'cool'); });
-    btns[2]?.addEventListener('click', (e) => { e.stopPropagation();
-      window.haClimateMode(entity, 'fan_only'); });
-    btns[3]?.addEventListener('click', (e) => { e.stopPropagation();
-      const cur = parseInt(getState(entity)?.attributes?.temperature ?? 24);
-      window.haClimateTemp(entity, cur + 1); });
-  });
-
-  // Guest Room AC scripts (climate page)
-  const guestScripts = {
-    'sbtn-g': 'script.guestac_on',  'sbtn-r': 'script.guestac',
-    '19°C':   'script.guesac_temp19','20°C': 'script.guesac_temp20',
-    '21°C':   'script.guesac_temp21','22°C': 'script.guesac_temp22',
-    '23°C':   'script.guesac_temp23','▲ Up':'script.guestac_tempup',
-    '▼ Down': 'script.guesac_tempdown',
-  };
-  document.querySelectorAll('#page-climate .sbtn').forEach(btn => {
-    const txt = btn.textContent.trim();
-    const sid = guestScripts[txt] || (btn.classList.contains('sbtn-g') ? guestScripts['sbtn-g'] : null)
-                                  || (btn.classList.contains('sbtn-r') ? guestScripts['sbtn-r'] : null);
-    if (sid) btn.onclick = () => window.haScript(sid);
-  });
-
-  // Quick Launch apps
-  const appActions = {
-    'nf':  () => window.haInputBtn('input_button.netflix'),
-    'yt':  () => window.haInputBtn('input_button.youtube'),
-    'sh':  () => window.haInputBtn('input_button.shahid'),
-    'px':  () => window.haInputBtn('input_button.plex'),
-    'st':  () => window.haInputBtn('input_button.stc_tv'),
-    'mk':  () => window.haBoolToggle('input_boolean.radio_automation'),
-  };
-  document.querySelectorAll('.app').forEach(app => {
-    const cls = [...app.classList].find(c => appActions[c]);
-    if (cls) app.onclick = appActions[cls];
-  });
-
-  // Movie Light app
-  document.querySelectorAll('.app').forEach(app => {
-    if (app.querySelector('.an')?.textContent === 'Movie Light')
-      app.onclick = () => window.haBoolToggle('input_boolean.movie_light');
-  });
-
-  // Media player controls
-  bindMediaControls('media_player.lg_webos_tv_uj670v',  '.mc-tv');
-  bindMediaControls('media_player.appletv',              '.mc-atv');
-  bindMediaControls('media_player.homepod_mini',         '#homepod-card');
+    rg.appendChild(el);
+  }
 }
 
-function bindMediaControls(entity, selector) {
-  const card = document.querySelector(selector);
-  if (!card) return;
-  card.querySelectorAll('.mcc').forEach(btn => {
-    const txt = btn.textContent;
-    if (txt === '⏸' || txt === '⏯') btn.onclick = () => window.haMediaCmd(entity,'media_play_pause');
-    if (txt === '⏮')                 btn.onclick = () => window.haMediaCmd(entity,'media_previous_track');
-    if (txt === '⏭')                 btn.onclick = () => window.haMediaCmd(entity,'media_next_track');
-    if (txt === '⏹')                 btn.onclick = () => window.haMediaCmd(entity,'media_stop');
-    if (txt === '🔇')                btn.onclick = () => window.haMediaCmd(entity,'volume_mute',{is_volume_muted:true});
-  });
+function renderSensors(sensors) {
+  const row = document.querySelector('.sensor-row');
+  if (!row || !sensors.length) return;
+  // only replace the dynamic sensor slots — keep static ones
+  const dynamic = row.querySelectorAll('[data-sensor-id]');
+  dynamic.forEach(el => el.remove());
+  for (const s of sensors) {
+    const el = document.createElement('div');
+    el.className = 'sensor';
+    el.dataset.sensorId = s.id;
+    el.innerHTML = `<span class="dot dok"></span>${s.icon} ${s.label}: ${s.okLabel}`;
+    row.appendChild(el);
+  }
 }
 
-// ── Live state updates ──
+function renderCameras(cameras) {
+  const grid = document.querySelector('.cam-grid');
+  if (!grid || !cameras.length) return;
+  grid.innerHTML = '';
+  for (const cam of cameras) {
+    const el = document.createElement('div');
+    el.className = 'cam';
+    el.dataset.camId = cam.id;
+    el.innerHTML = `
+      <img class="cam-img" id="cam-img-${cam.id}" alt="${cam.label}">
+      <div class="cam-ph" id="cam-ph-${cam.id}">📷</div>
+      <div class="cam-lbl">${cam.label}</div>
+      <div class="cam-live"><span class="dlive"></span>LIVE</div>`;
+    el.addEventListener('click', () => openCamStream(cam.entity, cam.label));
+    grid.appendChild(el);
+  }
+}
+
+// ── Live state updates ──────────────────────────────────────────────────────
 document.addEventListener('ha-states-updated', (ev) => {
   const s = ev.detail;
+  const L = window.__layout;
 
-  // ── Greeting sub-text ──
-  const _roomDefs = [
-    { name:'Living Room', lights:['switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509'], ac:'climate.1e05049f' },
-    { name:'Bedroom',     lights:['switch.masterroom_group_switch','switch.master_bath_left','switch.master_bath_center','switch.master_bath_right'], ac:'climate.1e050116' },
-    { name:'Kitchen',     lights:['switch.kitchen_group_switch','light.wled_2'] },
-    { name:'Office',      lights:['switch.office_group_swithces'], ac:'climate.1e51b62f' },
-    { name:'Baby Room',   lights:['switch.baby_room'] },
-    { name:'Guest Room',  lights:['switch.guest_room_switches'] },
-    { name:'Hallway',     lights:['switch.hallway_switches'] },
-    { name:'Laundry',     lights:['switch.laundry_light_left'], ac:'climate.1e51bb2c' },
-  ];
+  // rooms
+  const rooms = L?.rooms ?? _FALLBACK_ROOMS;
+  for (const r of rooms) {
+    if (!r.visible) continue;
+    updateRoomCard(s, r);
+  }
+
+  // status row
+  const lightEntities = L?.status?.lights ?? _FALLBACK_LIGHTS;
+  const acEntities    = L?.status?.acs    ?? ['climate.1e05049f','climate.1e050116','climate.1e51b62f','climate.1e51bb2c'];
+  const lightsOn = lightEntities.filter(e => s[e]?.state === 'on').length;
+  const svEls = document.querySelectorAll('.sv');
+  if (svEls[0]) {
+    svEls[0].textContent = lightsOn > 0 ? `${lightsOn} On` : 'Off';
+    const ico = document.getElementById('sc-light-ico');
+    if (ico) ico.style.opacity = lightsOn > 0 ? '1' : '0.35';
+  }
+  const _activeAcs = acEntities.filter(e => s[e]?.state && s[e].state !== 'off').length;
+  const _lrAcTemp  = s[acEntities[0]]?.attributes?.current_temperature;
+  if (svEls[1]) svEls[1].textContent = _activeAcs === 0 ? 'All Off' : (_lrAcTemp ? `${_lrAcTemp}°C` : `${_activeAcs} Active`);
+  const svAcSl = document.querySelectorAll('.sl')[1];
+  if (svAcSl) svAcSl.textContent = _activeAcs === 0 ? 'All ACs Off' : `${_activeAcs} AC${_activeAcs > 1?'s':''} Active`;
+
+  // presence
+  const persons = L?.chips?.presence?.persons ?? [{ entity:'person.raed', name:'Raed' }, { entity:'person.rola', name:'Rola' }];
+  if (svEls[2]) svEls[2].textContent = persons.map(p => s[p.entity]?.state === 'home' ? p.name : '').filter(Boolean).join(', ') || 'Away';
+
+  // water filter
+  const wf = L?.status?.waterFilter ?? 'switch.athom_smart_plug_v3_50b5b0_power';
+  if (svEls[3]) svEls[3].textContent = s[wf]?.state === 'on' ? 'On' : 'Off';
+
+  // chips
+  updateChips(s, L);
+
+  // battery
+  const battThreshold = parseFloat(s['input_number.threshold_battery']?.state ?? 40);
+  updateBatteryDynamic(s, battThreshold);
+
+  // greeting sub
+  const _roomDefs = rooms.map(r => ({ name: r.name, lights: r.lights, ac: r.ac }));
   const _active = _roomDefs.filter(r => {
     const lit = r.lights?.some(e => s[e]?.state === 'on');
     const cool = r.ac ? ['cool','heat','fan_only'].includes(s[r.ac]?.state) : false;
@@ -184,177 +250,72 @@ document.addEventListener('ha-states-updated', (ev) => {
   const _day = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()];
   const _gSub = document.getElementById('greet-sub');
   if (_gSub) {
-    if (!_active.length) {
-      _gSub.textContent = `${_day} · All rooms off`;
-    } else {
-      const _names = _active.slice(0,3).map(r => r.name).join(', ');
-      _gSub.textContent = `${_day} · ${_active.length} room${_active.length>1?'s':''} active · ${_names}${_active.length>3?` +${_active.length-3} more`:''}`;
-    }
+    _gSub.textContent = !_active.length
+      ? `${_day} · All rooms off`
+      : `${_day} · ${_active.length} room${_active.length>1?'s':''} active · ${_active.slice(0,3).map(r=>r.name).join(', ')}${_active.length>3?` +${_active.length-3} more`:''}`;
   }
 
-  // ── Sync popup toggles if popup is open (fixes stale initial state) ──
-  if (document.getElementById('popup')?.classList.contains('open')) {
-    document.getElementById('pcontent')?.querySelectorAll('.tog[data-entity]').forEach(tog => {
-      const ent = tog.dataset.entity;
-      const tst = s[ent];
-      if (!tst) return;
-      const ton = tst.state !== 'off' && tst.state !== 'unavailable' && tst.state !== 'unknown';
-      tog.classList.toggle('on', ton);
-      tog.classList.toggle('off', !ton);
-      const crow = tog.closest('.crow');
-      if (crow) { const cv = crow.querySelector('.cval'); if (cv) cv.textContent = ton ? 'On' : 'Off'; }
+  // security sensors
+  const sensors = L?.security?.sensors ?? [];
+  for (const cfg of sensors) {
+    const el = document.querySelector(`[data-sensor-id="${cfg.id}"]`);
+    if (!el) continue;
+    const state = s[cfg.entity]?.state;
+    const isOk = state === cfg.okState;
+    const dot = el.querySelector('.dot');
+    if (dot) dot.className = `dot ${isOk ? 'dok' : 'dwarn'}`;
+    el.childNodes[el.childNodes.length - 1].textContent = ` ${cfg.icon} ${cfg.label}: ${isOk ? cfg.okLabel : cfg.warnLabel}`;
+  }
+
+  // lock
+  const lock = L?.security?.lock;
+  if (lock) {
+    const lockState = s[lock.entity]?.state ?? 'unknown';
+    const lockBatt  = lock.batteryEntity ? (s[lock.batteryEntity]?.state ?? '?') : null;
+    document.querySelectorAll('.sensor').forEach(el => {
+      if (el.textContent.includes('Smart Lock')) {
+        el.childNodes[el.childNodes.length-1].textContent = ` 🔒 Smart Lock: ${lockState}${lockBatt ? ' · ' + lockBatt + '%' : ''}`;
+      }
     });
   }
 
-  // ── Chips ──
-  const raed = s['person.raed']?.state === 'home';
-  const rola = s['person.rola']?.state === 'home';
-  const presEl = document.querySelector('.chip-pur');
-  if (presEl) presEl.textContent = `👤 Raed · ${raed?'Home':'Away'}  |  Rola · ${rola?'Home':'Away'}`;
-
-  const wx = s['weather.forecast_home'];
-  if (wx) {
-    const temp = wx.attributes.temperature;
-    const condRaw = wx.state.replace(/-/g,' ');
-    const cond = condRaw.charAt(0).toUpperCase() + condRaw.slice(1);
-    const icon = {'sunny':'☀️','clear-day':'☀️','clear-night':'🌙','cloudy':'☁️',
-                  'partlycloudy':'⛅','fog':'🌫️','rainy':'🌧️','snowy':'❄️',
-                  'windy':'🌬️','lightning':'⛈️'}[wx.state] ?? '🌡️';
-    const wEl = document.querySelector('.chip-blu');
-    if (wEl) wEl.textContent = `${icon} ${temp}°C · ${cond}`;
+  // NAS
+  const nasEntity = L?.security?.nasEntity;
+  if (nasEntity) {
+    const nas = parseFloat(s[nasEntity]?.state ?? 0);
+    document.querySelectorAll('.sensor').forEach(el => {
+      if (el.textContent.includes('NAS')) {
+        const dot = el.querySelector('.dot');
+        if (dot) dot.className = `dot ${nas > 90 ? 'dwarn' : 'dok'}`;
+        el.childNodes[el.childNodes.length-1].textContent = ` 💾 NAS Storage: ${nas.toFixed(1)}%`;
+      }
+    });
   }
 
-  // ── Battery alerts (dynamic — threshold from input_number.threshold_battery) ──
-  const battThreshold = parseFloat(s['input_number.threshold_battery']?.state ?? 40);
-  updateBatteryDynamic(s, battThreshold);
-
-  // ── Status row ──
-  const lightEntities = [
-    // Living Room
-    'switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509',
-    // Kitchen
-    'switch.kitchenlights_left','switch.kitchenlights_right','light.wled_2',
-    // Bedroom
-    'switch.master_lights_left','switch.master_lights_center','switch.master_lights_right',
-    'switch.master_lights1_left','switch.master_lights1_center','switch.master_lights1_right',
-    'switch.master_bath_left','switch.master_bath_center','switch.master_bath_right',
-    // Office
-    'switch.office_light_left','switch.office_light_right',
-    // Baby Room
-    'switch.baby_room',
-    // Guest Room
-    'switch.guest_light_left','switch.guest_light_right','switch.guest_light_center',
-    // Hallway / Entrance
-    'switch.hallway_switches','switch.entrance_light_left','switch.entrance_light_right',
-    'switch.collidor','switch.betweenroomslights_left','switch.betweenroomslights_right',
-    // Laundry
-    'switch.laundry_light_left','switch.laundry_light_right',
-  ];
-  const lightsOn = lightEntities.filter(e => s[e]?.state === 'on').length;
-  document.querySelectorAll('.sv').forEach((el,i) => {
-    if (i===0) {
-      el.textContent = lightsOn > 0 ? `${lightsOn} On` : 'Off';
-      const ico = document.getElementById('sc-light-ico');
-      if (ico) ico.style.opacity = lightsOn > 0 ? '1' : '0.35';
-    }
-  });
-  const _acEntities = ['climate.1e05049f','climate.1e050116','climate.1e51b62f','climate.1e51bb2c'];
-  const _activeAcs = _acEntities.filter(e => s[e]?.state && s[e].state !== 'off').length;
-  const _lrAcTemp = s['climate.1e05049f']?.attributes?.current_temperature;
-  const _acSv = document.querySelectorAll('.sv')[1];
-  const _acSl = document.querySelectorAll('.sl')[1];
-  if (_acSv) _acSv.textContent = _activeAcs === 0 ? 'All Off' : (_lrAcTemp ? `${_lrAcTemp}°C` : `${_activeAcs} Active`);
-  if (_acSl) _acSl.textContent = _activeAcs === 0 ? 'All ACs Off' : `${_activeAcs} AC${_activeAcs > 1 ? 's' : ''} Active`;
-  document.querySelectorAll('.sv')[2].textContent = raed ? 'Raed' : 'Away';
-  const waterFilter = s['switch.athom_smart_plug_v3_50b5b0_power']?.state === 'on';
-  if (document.querySelectorAll('.sv')[3])
-    document.querySelectorAll('.sv')[3].textContent = waterFilter ? 'On' : 'Off';
-
-  // ── Room cards ──
-  updateRoom(s, 'r-living',
-    ['switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509'],
-    'climate.1e05049f');
-  updateRoom(s, 'r-bed',
-    ['switch.masterroom_group_switch','switch.master_lights_left','switch.master_lights1_left','switch.master_bath_left'],
-    'climate.1e050116');
-  updateRoom(s, 'r-kit',  ['switch.kitchen_group_switch','switch.kitchenlights_left','switch.kitchenlights_right','light.wled_2']);
-  updateRoom(s, 'r-office',['switch.office_group_swithces','switch.office_light_left','switch.office_light_right'], 'climate.1e51b62f');
-  updateRoom(s, 'r-baby', ['switch.baby_room','light.yeelight_colorb_0x1b35f509']);
-  updateRoom(s, 'r-guest',['switch.guest_room_switches','switch.guest_light_left','switch.guest_light_right','switch.guest_light_center']);
-  updateRoom(s, 'r-hall', ['switch.hallway_switches','switch.collidor','switch.betweenroomslights_left','switch.betweenroomslights_right','switch.entrance_light_left','switch.entrance_light_right']);
-  updateRoom(s, 'r-laundry',['switch.laundry_light_left','switch.laundry_light_right'], 'climate.1e51bb2c');
-
-  // ── Security sensors ──
-  const sensorMap = {
-    'MainDoorSensor Door':          { el: '🚪 Main Door',      entity: 'binary_sensor.maindoorsensor_contact',      okVal:'off', okLabel:'Closed', warnLabel:'Open' },
-    'Entrance Motion':               { el: '🏃 Entrance Motion', entity: 'binary_sensor.entrance_motion_sensor_occupancy', okVal:'off', okLabel:'Clear', warnLabel:'Motion' },
-    'Kitchen Motion':                { el: '🍳 Kitchen Motion',  entity: 'binary_sensor.kitchensensor_occupancy',     okVal:'off', okLabel:'Clear', warnLabel:'Motion' },
-    'Storage Motion':                { el: '📦 Storage Motion',  entity: 'binary_sensor.storagemotionsensor_occupancy',okVal:'off', okLabel:'Clear', warnLabel:'Motion' },
-  };
-  document.querySelectorAll('.sensor').forEach(el => {
-    const txt = el.textContent;
-    for (const [,cfg] of Object.entries(sensorMap)) {
-      if (txt.includes(cfg.el.replace(/^\S+\s/,''))) {
-        const state = s[cfg.entity]?.state;
-        const dot = el.querySelector('.dot');
-        const isOk = state === cfg.okVal;
-        if (dot) { dot.className = `dot ${isOk?'dok':'dwarn'}`; }
-        el.childNodes[el.childNodes.length-1].textContent =
-          ` ${cfg.el}: ${isOk ? cfg.okLabel : cfg.warnLabel}`;
-      }
-    }
-  });
-
-  // Smart lock
-  const lockBatt = s['sensor.aqara_smart_lock_u200_battery']?.state ?? '?';
-  const lockState = s['lock.aqara_smart_lock_u200']?.state ?? 'unknown';
-  document.querySelectorAll('.sensor').forEach(el => {
-    if (el.textContent.includes('Smart Lock'))
-      el.childNodes[el.childNodes.length-1].textContent = ` 🔒 Smart Lock: ${lockState} · ${lockBatt}%`;
-  });
-
-  // NAS storage
-  const nas = parseFloat(s['sensor.cloud_gateway_fiber_storage_utilization']?.state ?? 0);
-  document.querySelectorAll('.sensor').forEach(el => {
-    if (el.textContent.includes('NAS')) {
-      const dot = el.querySelector('.dot');
-      if (dot) dot.className = `dot ${nas > 90 ? 'dwarn' : 'dok'}`;
-      el.childNodes[el.childNodes.length-1].textContent = ` 💾 NAS Storage: ${nas.toFixed(1)}%`;
-    }
-  });
-
-  // Alarm chip
-  const alarmState = s['alarm_control_panel.alarmo']?.state ?? 'unknown';
-  const alarmMap = { disarmed:'✓ Disarmed', armed_away:'🚨 Armed Away', armed_home:'🏠 Armed Home', triggered:'🚨 TRIGGERED' };
+  // alarm page
+  const alarmEntity = L?.security?.alarm ?? 'alarm_control_panel.alarmo';
+  const alarmState  = s[alarmEntity]?.state ?? 'unknown';
   const almEl = document.querySelector('.alm-s');
   if (almEl) {
+    const alarmMap = { disarmed:'✓ Disarmed', armed_away:'🚨 Armed Away', armed_home:'🏠 Armed Home', triggered:'🚨 TRIGGERED' };
     almEl.textContent = alarmMap[alarmState] ?? alarmState;
     almEl.style.color = alarmState === 'disarmed' ? '#4ade80' : '#f87171';
   }
-  const almChip = document.getElementById('alarm-chip') ?? document.querySelector('.chip-grn');
-  if (almChip) almChip.textContent = alarmMap[alarmState] ? `🛡️ ${alarmMap[alarmState]}` : '🛡️ ...';
 
-  const doorSt = s['binary_sensor.maindoorsensor_contact']?.state;
-  const doorEl = document.getElementById('door-chip');
-  if (doorEl) {
-    const doorOpen = doorSt === 'on';
-    doorEl.textContent = doorOpen ? '🚪 Door · Open' : '🚪 Door · Closed';
-    doorEl.style.borderColor = doorOpen ? 'rgba(239,68,68,.5)' : '';
-    doorEl.style.color = doorOpen ? '#f87171' : '';
-  }
+  // AC cards
+  const acDefs = [
+    { cls:'ac-lr', entity:'climate.1e05049f' },
+    { cls:'ac-bd', entity:'climate.1e050116' },
+    { cls:'ac-of', entity:'climate.1e51b62f' },
+    { cls:'ac-ln', entity:'climate.1e51bb2c' },
+  ];
+  for (const d of acDefs) updateAcCard(s, d.cls, d.entity);
 
-  // ── Climate page ──
-  updateAcCard(s,'ac-lr','climate.1e05049f');
-  updateAcCard(s,'ac-bd','climate.1e050116');
-  updateAcCard(s,'ac-of','climate.1e51b62f');
-  updateAcCard(s,'ac-ln','climate.1e51bb2c');
-
-  // ── Media player ──
+  // media
   updateMedia(s,'media_player.lg_webos_tv_uj670v','.mc-tv','LG TV · Living Room');
   updateMedia(s,'media_player.appletv','.mc-atv','Apple TV');
   updateMedia(s,'media_player.homepod_mini','#homepod-card','🍎 HomePod Mini');
 
-  // Hide Now Playing section when all cards are off
   const _anyMedia = ['.mc-tv','.mc-atv','#homepod-card'].some(sel => {
     const c = document.querySelector(sel); return c && c.style.display !== 'none';
   });
@@ -363,206 +324,236 @@ document.addEventListener('ha-states-updated', (ev) => {
   if (_npSh) _npSh.style.display = _anyMedia ? '' : 'none';
   if (_npRow) _npRow.style.display = _anyMedia ? '' : 'none';
 
-  // ── Radio ──
-  const radio = s['input_boolean.radio_automation']?.state === 'on';
-  syncRadio(radio);
+  // radio
+  syncRadio(s['input_boolean.radio_automation']?.state === 'on');
 
-  // ── Prayer times ──
-  const prayers = [
-    { name:'Fajr',    icon:'🌙', entity:'sensor.islamic_prayer_times_fajr_prayer' },
-    { name:'Dhuhr',   icon:'☀️', entity:'sensor.islamic_prayer_times_dhuhr_prayer' },
-    { name:'Asr',     icon:'🌤️', entity:'sensor.islamic_prayer_times_asr_prayer' },
-    { name:'Maghrib', icon:'🌇', entity:'sensor.islamic_prayer_times_maghrib_prayer' },
-    { name:'Isha',    icon:'🌃', entity:'sensor.islamic_prayer_times_isha_prayer' },
-  ];
+  // prayer
+  const praySensors = L?.chips?.prayer?.sensors ?? {
+    fajr:'sensor.islamic_prayer_times_fajr_prayer', dhuhr:'sensor.islamic_prayer_times_dhuhr_prayer',
+    asr:'sensor.islamic_prayer_times_asr_prayer',   maghrib:'sensor.islamic_prayer_times_maghrib_prayer',
+    isha:'sensor.islamic_prayer_times_isha_prayer',
+  };
+  const prayerNames = { fajr:'Fajr', dhuhr:'Dhuhr', asr:'Asr', maghrib:'Maghrib', isha:'Isha' };
+  const prayerIcons = { fajr:'🌙', dhuhr:'☀️', asr:'🌤️', maghrib:'🌇', isha:'🌃' };
   const now = Date.now();
   let next = null;
-  for (const p of prayers) {
-    const t = new Date(s[p.entity]?.state).getTime();
-    if (!isNaN(t) && t > now) { next = {...p, time: t}; break; }
+  for (const [key, entity] of Object.entries(praySensors)) {
+    const t = new Date(s[entity]?.state).getTime();
+    if (!isNaN(t) && t > now) { next = { name: prayerNames[key], icon: prayerIcons[key], time: t }; break; }
   }
-  if (!next) next = {...prayers[0], time: new Date(s[prayers[0].entity]?.state).getTime()};
-  if (next) {
+  if (!next) { const k = 'fajr'; const t = new Date(s[praySensors[k]]?.state).getTime(); if (!isNaN(t)) next = { name: prayerNames[k], icon: prayerIcons[k], time: t }; }
+  const pEl = document.getElementById('prayer-chip');
+  if (pEl && next) {
     const d = new Date(next.time);
-    const hh = String(d.getHours()).padStart(2,'0');
-    const mm = String(d.getMinutes()).padStart(2,'0');
-    const pEl = document.getElementById('prayer-chip');
-    if (pEl) pEl.textContent = `🕌 ${next.name} · ${hh}:${mm}`;
+    const localStr = d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    const diffMs = next.time - now;
+    const hrs = Math.floor(diffMs / 3600000); const mins = Math.floor((diffMs % 3600000) / 60000);
+    const left = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    pEl.innerHTML = `🕌 ${next.icon} <strong>${next.name}</strong> · ${localStr} &nbsp;<span style="opacity:.75;font-size:11px;">in ${left}</span>`;
+  }
+
+  // sync open popup toggles
+  if (document.getElementById('popup')?.classList.contains('open')) {
+    document.getElementById('pcontent')?.querySelectorAll('.tog[data-entity]').forEach(tog => {
+      const ent = tog.dataset.entity;
+      const tst = s[ent];
+      if (!tst) return;
+      const ton = tst.state !== 'off' && tst.state !== 'unavailable' && tst.state !== 'unknown';
+      tog.classList.toggle('on', ton); tog.classList.toggle('off', !ton);
+      const crow = tog.closest('.crow');
+      if (crow) { const cv = crow.querySelector('.cval'); if (cv) cv.textContent = ton ? 'On' : 'Off'; }
+    });
   }
 });
 
-// ── Helpers ──
+// ── Room card updater ───────────────────────────────────────────────────────
+function updateRoomCard(s, room) {
+  const el = document.querySelector(`.room.r-${room.id}`);
+  if (!el) return;
+  const lightsOn = room.lights.some(e => s[e]?.state === 'on');
+  const acSt = room.ac ? s[room.ac] : null;
+  const acOn = acSt?.state === 'cool' || acSt?.state === 'heat' || acSt?.state === 'fan_only';
+  const acTemp = acSt?.attributes?.temperature;
+  el.classList.toggle('r-off', !lightsOn && !acOn);
 
-function updateBatteryDynamic(s, threshold) {
-  const wrap = document.getElementById('notif-wrap');
-  if (!wrap) return;
+  const c = _COLOR_CSS[room.color] ?? _COLOR_CSS.blue;
 
-  // Collect all battery sensors below threshold
-  const low = [];
-  for (const [entityId, state] of Object.entries(s)) {
-    if (!state || !entityId.startsWith('sensor.')) continue;
-    const attrs = state.attributes ?? {};
-    const isBatt = attrs.device_class === 'battery'
-                || entityId.includes('_battery')
-                || entityId.includes('_batt_');
-    if (!isBatt) continue;
-    const pct = parseFloat(state.state);
-    if (isNaN(pct) || pct > threshold) continue;
-    low.push({ entityId, pct, name: attrs.friendly_name ?? entityId.replace('sensor.','').replace(/_/g,' ') });
-  }
-
-  // Remove cards whose battery recovered above threshold
-  wrap.querySelectorAll('.notif-card[data-entity]').forEach(card => {
-    const entity = card.dataset.entity;
-    const pct = parseFloat(s[entity]?.state);
-    if (!isNaN(pct) && pct > threshold) {
-      window._battDismissed?.delete(card.id);
-      card.remove();
+  // light badge
+  el.querySelectorAll('.rbadges .rb:not([data-badge])').forEach(b => {
+    if (b.textContent.includes('💡') || b.textContent.includes('Off') || b.textContent.includes('On')) {
+      b.textContent = lightsOn ? '💡 On' : '💡 Off';
+      b.className = lightsOn ? `rb ${c.rb}` : 'rb rb-off';
     }
   });
 
-  // Add / update low-battery cards
-  low.forEach(({ entityId, pct, name }) => {
-    const cardId = 'nbatt_' + entityId.replace(/[^a-z0-9]/gi, '_');
-    if ((window._battDismissed ?? new Set()).has(cardId)) return;
-    const isCrit = pct <= Math.round(threshold * 0.5);
-    const icon   = _battIcon(entityId, name);
-    const level  = isCrit ? 'crit' : 'warn';
-
-    let card = document.getElementById(cardId);
-    if (card) {
-      const fill  = card.querySelector('.batt-fill-crit, .batt-fill-warn');
-      const label = card.querySelector('[class^="batt-pct"]');
-      if (fill)  fill.style.width = pct + '%';
-      if (label) label.textContent = pct + '%';
-    } else {
-      card = document.createElement('div');
-      card.className = `notif-card notif-${level}`;
-      card.id = cardId;
-      card.dataset.entity = entityId;
-      card.innerHTML = `
-        <div class="notif-ico">${icon}</div>
-        <div class="notif-body">
-          <div class="notif-title">${name} — ${isCrit ? 'Critical' : 'Low'} Battery</div>
-          <div class="notif-sub">${entityId}</div>
-          <div class="notif-batt">
-            <div class="batt-bar"><div class="batt-fill-${level}" style="width:${pct}%"></div></div>
-            <div class="batt-pct batt-pct-${level}">${pct}%</div>
-          </div>
-        </div>
-        <button class="notif-x" onclick="dismissNotif('${cardId}')">✕</button>`;
-      wrap.appendChild(card);
-    }
-  });
-
-  // Show/hide bar and update bell badge
-  const bar = document.getElementById('notif-bar');
-  if (bar) bar.style.display = wrap.children.length ? '' : 'none';
-  if (typeof updateBell === 'function') updateBell();
-}
-
-function _battIcon(entityId, name) {
-  const n = (entityId + ' ' + name).toLowerCase();
-  if (n.includes('ipad') || n.includes('tablet'))                    return '📱';
-  if (n.includes('iphone') || n.includes('phone') || n.includes('mobile')) return '📱';
-  if (n.includes('brush') || n.includes('toothbrush'))               return '🪥';
-  if (n.includes('lock'))                                             return '🔒';
-  if (n.includes('door') || n.includes('contact'))                   return '🚪';
-  if (n.includes('motion'))                                           return '🏃';
-  if (n.includes('remote') || n.includes('button'))                  return '🎮';
-  if (n.includes('watch'))                                            return '⌚';
-  return '🔋';
-}
-
-function syncRadio(isOn) {
-  // radio-tog2 lives on the TV page
-  const tog2 = document.getElementById('radio-tog2');
-  if (tog2) { tog2.classList.toggle('on', isOn); tog2.classList.toggle('off', !isOn); }
-
-  const map = {
-    'radio-tv-title': isOn ? 'Radio — On' : 'Radio — Off',
-    'radio-app-lbl':  isOn ? 'Radio On'   : 'Radio Off',
-  };
-  for (const [id, txt] of Object.entries(map)) {
-    const el = document.getElementById(id); if (el) el.textContent = txt;
-  }
-  const dot = document.getElementById('radio-app-dot');
-  if (dot) dot.style.background = isOn ? '#4ade80' : '#6b7280';
-  // Dim the radio app icon when off
-  const ico = document.getElementById('radio-app-ico');
-  if (ico) ico.style.opacity = isOn ? '1' : '0.4';
-}
-
-function updateRoom(s, roomCls, lightEntities, acEntity) {
-  const room = document.querySelector(`.room.${roomCls}`);
-  if (!room) return;
-  const lightsOn = lightEntities.some(e => s[e]?.state === 'on');
-  const acState  = acEntity ? s[acEntity] : null;
-  const acOn     = acState?.state === 'cool' || acState?.state === 'heat' || acState?.state === 'fan_only';
-  const acTemp   = acState?.attributes?.temperature;
-
-  // Toggle room off class (never remove the room's own class — it's needed for CSS + querySelector)
-  room.classList.toggle('r-off', !lightsOn && !acOn);
-
-  // Update badges
-  const badges = room.querySelector('.rbadges');
-  if (badges) {
-    badges.querySelectorAll('.rb-on,.rb-off').forEach(b => {
-      if (b.textContent.includes('💡')) {
-        b.textContent = lightsOn ? '💡 On' : '💡 Off';
-        b.className = `rb ${lightsOn ? 'rb-on' : 'rb-off'}`;
-      }
-    });
-    if (acEntity) {
-      const acMode = acState?.state;
-      const acModeIcon = { cool:'❄️', heat:'🌡️', fan_only:'💨', dry:'💧' }[acMode ?? ''] ?? '❄️';
-      // Use data-badge="ac" — stable across class changes (rb-ac ↔ rb-off)
-      badges.querySelectorAll('[data-badge="ac"]').forEach(b => {
-        if (acOn) {
-          b.textContent = `${acModeIcon} ${acTemp ?? '--'}°`;
-          b.className = 'rb rb-ac';
-        } else {
-          b.textContent = '❄️ Off';
-          b.className = 'rb rb-off';
-        }
-      });
-    }
+  // ac badge
+  const acBadge = el.querySelector('[data-badge="ac"]');
+  if (acBadge) {
+    const modeIcon = { cool:'❄️', heat:'🌡️', fan_only:'💨' }[acSt?.state ?? ''] ?? '❄️';
+    acBadge.textContent = acOn ? `${modeIcon} ${acTemp ?? '--'}°` : '❄️ Off';
+    acBadge.className = acOn ? 'rb rb-ac' : 'rb rb-off';
   }
 
-  // Update button labels + classes
-  const _colorMap = { 'r-living':'rbtn-b','r-bed':'rbtn-p','r-kit':'rbtn-a','r-office':'rbtn-c','r-baby':'rbtn-r','r-guest':'rbtn-g','r-hall':'rbtn-b','r-laundry':'rbtn-r' };
-  const _colorCls = _colorMap[roomCls] ?? 'rbtn-b';
-  room.querySelectorAll('.rbtn').forEach(btn => {
-    if (btn.textContent.includes('💡')) {
+  // quick buttons
+  el.querySelectorAll('.rbtn').forEach(btn => {
+    const action = btn.dataset.action;
+    if (action === 'light') {
       btn.textContent = lightsOn ? '💡 On' : '💡 Off';
-      btn.className = `rbtn ${lightsOn ? _colorCls : 'rbtn-off'}`;
-    }
-    if (btn.textContent.includes('❄️') && acEntity) {
+      btn.className = `rbtn ${lightsOn ? c.rbtn : 'rbtn-off'}`;
+    } else if (action === 'ac') {
       btn.textContent = acOn ? `❄️ ${acTemp ?? '--'}°` : '❄️ Off';
-      btn.className = `rbtn ${acOn ? _colorCls : 'rbtn-off'}`;
+      btn.className = `rbtn ${acOn ? c.rbtn : 'rbtn-off'}`;
     }
   });
 }
+
+// ── Chip updater ────────────────────────────────────────────────────────────
+function updateChips(s, L) {
+  const alarmState = s['alarm_control_panel.alarmo']?.state ?? 'unknown';
+  const almMap = { disarmed:'✓ Disarmed', armed_away:'🚨 Armed Away', armed_home:'🏠 Armed Home', triggered:'🚨 TRIGGERED' };
+  const almChip = document.getElementById('alarm-chip') ?? document.querySelector('.chip-grn');
+  if (almChip) almChip.textContent = `🛡️ ${almMap[alarmState] ?? alarmState}`;
+
+  const doorEntity = L?.chips?.door?.entity ?? 'binary_sensor.maindoorsensor_contact';
+  const doorSt = s[doorEntity]?.state;
+  const doorEl = document.getElementById('door-chip');
+  if (doorEl) {
+    const doorOpen = doorSt === 'on';
+    doorEl.textContent = doorOpen ? '🚪 Door · Open' : '🚪 Door · Closed';
+    doorEl.style.borderColor = doorOpen ? 'rgba(239,68,68,.5)' : '';
+    doorEl.style.color = doorOpen ? '#f87171' : '';
+  }
+
+  const wxEntity = L?.chips?.weather?.entity ?? 'weather.forecast_home';
+  const wx = s[wxEntity];
+  if (wx) {
+    const wIcons = { sunny:'☀️','clear-day':'☀️','clear-night':'🌙',cloudy:'☁️',partlycloudy:'⛅',fog:'🌫️',rainy:'🌧️',snowy:'❄️',windy:'🌬️',lightning:'⛈️' };
+    const icon = wIcons[wx.state] ?? '🌡️';
+    const condRaw = wx.state.replace(/-/g,' ');
+    const cond = condRaw.charAt(0).toUpperCase() + condRaw.slice(1);
+    const wEl = document.querySelector('.chip-blu') ?? document.getElementById('weather-chip');
+    if (wEl) wEl.textContent = `${icon} ${wx.attributes.temperature}°C · ${cond}`;
+  }
+
+  const persons = L?.chips?.presence?.persons ?? [{ entity:'person.raed', name:'Raed' }, { entity:'person.rola', name:'Rola' }];
+  const presEl = document.querySelector('.chip-pur');
+  if (presEl) presEl.textContent = '👤 ' + persons.map(p => `${p.name} · ${s[p.entity]?.state === 'home' ? 'Home' : 'Away'}`).join('  |  ');
+}
+
+// ── Popup rooms ──────────────────────────────────────────────────────────────
+// Dynamic popup content generated from layout config
+window.pop = function(id) {
+  const L = window.__layout;
+  const room = L?.rooms?.find(r => r.id === id) ?? _FALLBACK_ROOMS.find(r => r.id === id);
+  if (!room) return;
+
+  const pico = document.getElementById('pico');
+  const pname = document.getElementById('pname');
+  const psub = document.getElementById('psub');
+  const pcontent = document.getElementById('pcontent');
+  if (!pname || !pcontent) return;
+
+  const c = _COLOR_CSS[room.color] ?? _COLOR_CSS.blue;
+  if (pico) { pico.textContent = room.icon; pico.style.background = c.rico; }
+  if (pname) pname.textContent = room.name;
+  if (psub) psub.textContent = `${room.lights.length} light${room.lights.length !== 1 ? 's' : ''}${room.ac ? ' · AC' : ''}`;
+
+  // Generate popup HTML from room's entity list
+  let html = '';
+
+  // Lights section
+  html += `<div class="psec">💡 Lights</div><div class="pc">`;
+  for (const entity of room.lights) {
+    const label = entity.split('.')[1].replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    html += `<div class="ctrl"><div class="clbl">${label}</div>
+      <div class="crow"><div><div class="cval">--</div><div class="csub">${entity}</div></div>
+      <button class="tog off" data-entity="${entity}"></button></div></div>`;
+  }
+  html += `</div>`;
+
+  // AC section
+  if (room.ac) {
+    const acColors = { blue:'#38bdf8', purple:'#a78bfa', amber:'#fbbf24', cyan:'#22d3ee', pink:'#fb7185', green:'#4ade80', indigo:'#94a3b8', rose:'#fb7185' };
+    const acColor = acColors[room.color] ?? '#38bdf8';
+    html += `<div class="psec">❄️ Air Conditioning</div><div class="pc">
+      <div class="ctrl full">
+        <div class="clbl">${room.name} AC — ${room.ac}</div>
+        <div class="tempd"><span class="tbig" style="color:${acColor}">--</span><span class="tunit">°C</span></div>
+        <div class="csub">Standby</div>
+        <input class="tslider" type="range" min="16" max="30" value="23" style="--c:${acColor}" oninput="slup(this)" data-ac="${room.ac}">
+        <div class="scenes">
+          <button class="scene off">❄️ Cool</button>
+          <button class="scene off">💨 Fan</button>
+          <button class="scene off">🌡️ Heat</button>
+          <button class="scene off">Off</button>
+        </div>
+      </div></div>`;
+  }
+
+  // Extras section
+  if (room.extras?.length) {
+    html += `<div class="psec">⚙️ Extra Entities</div><div class="pc">`;
+    for (const ex of room.extras) {
+      html += `<div class="ctrl"><div class="clbl">${ex.label}</div>
+        <div class="crow"><div><div class="cval">--</div><div class="csub">${ex.entity}</div></div>
+        <button class="tog off" data-entity="${ex.entity}"></button></div></div>`;
+    }
+    html += `</div>`;
+  }
+
+  pcontent.innerHTML = html;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('popup').classList.add('open');
+  bindPopupControls();
+};
+
+// For legacy popup IDs used in AC page
+window.pop = (function(_orig) {
+  return function(id) {
+    if (id.startsWith('ac-')) { openAcPopup(id); return; }
+    _orig(id);
+  };
+})(window.pop);
+
+function openAcPopup(id) {
+  const acMap = { 'ac-lr': { entity:'climate.1e05049f', name:'Living Room', color:'#38bdf8' },
+    'ac-bd': { entity:'climate.1e050116', name:'Bedroom', color:'#a78bfa' },
+    'ac-of': { entity:'climate.1e51b62f', name:'Office', color:'#22d3ee' },
+    'ac-ln': { entity:'climate.1e51bb2c', name:'Laundry', color:'#fb7185' } };
+  const def = acMap[id]; if (!def) return;
+  const pico = document.getElementById('pico');
+  const pname = document.getElementById('pname');
+  const psub = document.getElementById('psub');
+  if (pico) { pico.textContent = '❄️'; pico.style.background = 'rgba(56,189,248,.22)'; }
+  if (pname) pname.textContent = def.name + ' AC';
+  if (psub) psub.textContent = def.entity;
+  document.getElementById('pcontent').innerHTML = `
+    <div class="pc"><div class="ctrl full">
+      <div class="tempd"><span class="tbig" style="color:${def.color}">--</span><span class="tunit">°C</span></div>
+      <div class="csub">Standby</div>
+      <input class="tslider" type="range" min="16" max="30" value="23" style="--c:${def.color}" oninput="slup(this)" data-ac="${def.entity}">
+      <div class="scenes"><button class="scene off">❄️ Cool</button><button class="scene off">💨 Fan</button><button class="scene off">🌡️ Heat</button><button class="scene off">Off</button></div>
+    </div></div>`;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('popup').classList.add('open');
+  bindPopupControls();
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function updateAcCard(s, cls, entity) {
   const card = document.querySelector(`.${cls}`);
   if (!card) return;
-  const st = s[entity];
-  if (!st) return;
-  const mode  = st.state;
-  const setTemp = st.attributes?.temperature ?? '--';
-  const curTemp = st.attributes?.current_temperature ?? '--';
-  const isOn  = mode !== 'off';
+  const st = s[entity]; if (!st) return;
+  const mode = st.state; const setTemp = st.attributes?.temperature ?? '--'; const curTemp = st.attributes?.current_temperature ?? '--';
+  const isOn = mode !== 'off';
   const badge = card.querySelector('.badge');
   const tempEl = card.querySelector('.actemp');
   const subEl  = card.querySelector('.acsub');
   const modeLabel = { cool:'❄️ Cool', heat:'🌡️ Heat', fan_only:'💨 Fan', dry:'💧 Dry' }[mode] ?? mode;
-  if (badge) {
-    badge.textContent = isOn ? modeLabel : 'Off';
-    badge.className   = isOn ? 'badge badge-c' : 'badge badge-off';
-  }
+  if (badge) { badge.textContent = isOn ? modeLabel : 'Off'; badge.className = isOn ? 'badge badge-c' : 'badge badge-off'; }
   if (tempEl) tempEl.textContent = isOn ? `${setTemp}°` : '--°';
-  if (subEl)  subEl.textContent  = isOn ? `Set ${setTemp}°C · Room ${curTemp}°C · ${st.attributes?.fan_mode ?? ''}` : 'Off';
+  if (subEl) subEl.textContent = isOn ? `Set ${setTemp}°C · Room ${curTemp}°C · ${st.attributes?.fan_mode ?? ''}` : 'Off';
 }
 
 function updateMedia(s, entity, selector, label) {
@@ -580,179 +571,145 @@ function updateMedia(s, entity, selector, label) {
     if (_mediaPauseTimers.has(entity)) { clearTimeout(_mediaPauseTimers.get(entity)); _mediaPauseTimers.delete(entity); }
   } else if (!_mediaPauseTimers.has(entity)) {
     const tid = setTimeout(() => {
-      const c = document.querySelector(selector);
-      if (c) c.style.display = 'none';
+      const c = document.querySelector(selector); if (c) c.style.display = 'none';
       _mediaPauseTimers.delete(entity);
-      const anyMedia = ['.mc-tv','.mc-atv','#homepod-card'].some(sel => {
-        const c2 = document.querySelector(sel); return c2 && c2.style.display !== 'none';
-      });
-      const _npSh2 = document.getElementById('now-playing-sh');
-      const _npRow2 = document.getElementById('now-playing-row');
-      if (_npSh2) _npSh2.style.display = anyMedia ? '' : 'none';
-      if (_npRow2) _npRow2.style.display = anyMedia ? '' : 'none';
+      const any = ['.mc-tv','.mc-atv','#homepod-card'].some(sel => { const c2 = document.querySelector(sel); return c2 && c2.style.display !== 'none'; });
+      const _np1 = document.getElementById('now-playing-sh'); if (_np1) _np1.style.display = any ? '' : 'none';
+      const _np2 = document.getElementById('now-playing-row'); if (_np2) _np2.style.display = any ? '' : 'none';
     }, 5 * 60 * 1000);
     _mediaPauseTimers.set(entity, tid);
   }
   card.style.display = '';
   const playing = st.state === 'playing';
-  const titleEl = card.querySelector('.mtit');
-  const subEl   = card.querySelector('.msub');
-  const playBtn = card.querySelector('.mcc.play');
+  const titleEl = card.querySelector('.mtit'); const subEl = card.querySelector('.msub'); const playBtn = card.querySelector('.mcc.play');
   if (titleEl) titleEl.textContent = st.attributes?.media_title ?? (playing ? 'Playing' : st.state.charAt(0).toUpperCase()+st.state.slice(1));
-  if (subEl) {
-    const vol = Math.round((st.attributes?.volume_level ?? 0) * 100);
-    subEl.textContent = `Vol ${vol}% · ${st.state}`;
-  }
+  if (subEl) { const vol = Math.round((st.attributes?.volume_level ?? 0) * 100); subEl.textContent = `Vol ${vol}% · ${st.state}`; }
   if (playBtn) playBtn.textContent = playing ? '⏸' : '▶️';
   const volFill = card.querySelector('.volf');
   if (volFill) volFill.style.width = Math.round((st.attributes?.volume_level ?? 0.65) * 100) + '%';
 }
 
-// Override toggleRadio to call HA
-window.toggleRadio = () => callHA('input_boolean','toggle','input_boolean.radio_automation');
+function syncRadio(isOn) {
+  const tog2 = document.getElementById('radio-tog2');
+  if (tog2) { tog2.classList.toggle('on', isOn); tog2.classList.toggle('off', !isOn); }
+  const map = { 'radio-tv-title': isOn?'Radio — On':'Radio — Off', 'radio-app-lbl': isOn?'Radio On':'Radio Off' };
+  for (const [id, txt] of Object.entries(map)) { const el = document.getElementById(id); if (el) el.textContent = txt; }
+  const dot = document.getElementById('radio-app-dot');
+  if (dot) dot.style.background = isOn ? '#4ade80' : '#6b7280';
+  const ico = document.getElementById('radio-app-ico');
+  if (ico) ico.style.opacity = isOn ? '1' : '0.4';
+}
+window.updateRadioToggle = () => {};
 
-// ── Popup HA binding ─────────────────────────────────────────────────────────
+function updateBatteryDynamic(s, threshold) {
+  const wrap = document.getElementById('notif-wrap'); if (!wrap) return;
+  const low = [];
+  for (const [entityId, state] of Object.entries(s)) {
+    if (!state || !entityId.startsWith('sensor.')) continue;
+    const attrs = state.attributes ?? {};
+    const isBatt = attrs.device_class === 'battery' || entityId.includes('_battery') || entityId.includes('_batt_');
+    if (!isBatt) continue;
+    const pct = parseFloat(state.state);
+    if (isNaN(pct) || pct > threshold) continue;
+    low.push({ entityId, pct, name: attrs.friendly_name ?? entityId.replace('sensor.','').replace(/_/g,' ') });
+  }
+  wrap.querySelectorAll('.notif-card[data-entity]').forEach(card => {
+    const pct = parseFloat(s[card.dataset.entity]?.state);
+    if (!isNaN(pct) && pct > threshold) { window._battDismissed?.delete(card.id); card.remove(); }
+  });
+  low.forEach(({ entityId, pct, name }) => {
+    const cardId = 'nbatt_' + entityId.replace(/[^a-z0-9]/gi, '_');
+    if ((window._battDismissed ?? new Set()).has(cardId)) return;
+    const isCrit = pct <= Math.round(threshold * 0.5);
+    const icon = _battIcon(entityId, name); const level = isCrit ? 'crit' : 'warn';
+    let card = document.getElementById(cardId);
+    if (card) {
+      const fill = card.querySelector('.batt-fill-crit, .batt-fill-warn'); if (fill) fill.style.width = pct + '%';
+      const label = card.querySelector('[class^="batt-pct"]'); if (label) label.textContent = pct + '%';
+    } else {
+      card = document.createElement('div');
+      card.className = `notif-card notif-${level}`; card.id = cardId; card.dataset.entity = entityId;
+      card.innerHTML = `<div class="notif-ico">${icon}</div><div class="notif-body"><div class="notif-title">${name} — ${isCrit?'Critical':'Low'} Battery</div><div class="notif-sub">${entityId}</div><div class="notif-batt"><div class="batt-bar"><div class="batt-fill-${level}" style="width:${pct}%"></div></div><div class="batt-pct batt-pct-${level}">${pct}%</div></div></div><button class="notif-x" onclick="dismissNotif('${cardId}')">✕</button>`;
+      wrap.appendChild(card);
+    }
+  });
+  const bar = document.getElementById('notif-bar'); if (bar) bar.style.display = wrap.children.length ? '' : 'none';
+  if (typeof updateBell === 'function') updateBell();
+}
 
+function _battIcon(entityId, name) {
+  const n = (entityId + ' ' + name).toLowerCase();
+  if (n.includes('ipad')||n.includes('tablet')) return '📱';
+  if (n.includes('iphone')||n.includes('phone')||n.includes('mobile')) return '📱';
+  if (n.includes('brush')||n.includes('toothbrush')) return '🪥';
+  if (n.includes('lock')) return '🔒';
+  if (n.includes('door')||n.includes('contact')) return '🚪';
+  if (n.includes('motion')) return '🏃';
+  if (n.includes('remote')||n.includes('button')) return '🎮';
+  if (n.includes('watch')) return '⌚';
+  return '🔋';
+}
+
+// ── Popup HA binding ────────────────────────────────────────────────────────
 function bindPopupControls() {
-  const pc = document.getElementById('pcontent');
-  if (!pc) return;
+  const pc = document.getElementById('pcontent'); if (!pc) return;
 
-  // 1. Toggle buttons with data-entity → call haToggle (or climate on/off)
   pc.querySelectorAll('.tog[data-entity]').forEach(tog => {
-    const entity = tog.dataset.entity;
-    const domain = entity.split('.')[0];
+    const entity = tog.dataset.entity; const domain = entity.split('.')[0];
     const st = getState(entity);
     if (st) {
       const isOn = st.state !== 'off' && st.state !== 'unavailable' && st.state !== 'unknown';
-      tog.classList.toggle('on', isOn);
-      tog.classList.toggle('off', !isOn);
+      tog.classList.toggle('on', isOn); tog.classList.toggle('off', !isOn);
       const crow = tog.closest('.crow');
-      if (crow) {
-        const cval = crow.querySelector('.cval');
-        if (cval && cval.textContent === '--') cval.textContent = isOn ? 'On' : 'Off';
-      }
+      if (crow) { const cval = crow.querySelector('.cval'); if (cval && cval.textContent === '--') cval.textContent = isOn ? 'On' : 'Off'; }
     }
     tog.onclick = (e) => {
       e.stopPropagation();
       const isOn = tog.classList.contains('on');
-      tog.classList.toggle('on', !isOn);
-      tog.classList.toggle('off', isOn);
+      tog.classList.toggle('on', !isOn); tog.classList.toggle('off', isOn);
       const crow = tog.closest('.crow');
       if (crow) { const cv = crow.querySelector('.cval'); if (cv) cv.textContent = isOn ? 'Off' : 'On'; }
-      if (domain === 'climate') {
-        window.haClimateMode(entity, isOn ? 'off' : 'cool');
-      } else if (domain === 'automation') {
-        callHA('automation', 'toggle', entity);
-      } else {
-        window.haToggle(entity);
-      }
+      if (domain === 'climate') window.haClimateMode(entity, isOn ? 'off' : 'cool');
+      else if (domain === 'automation') callHA('automation','toggle',entity);
+      else window.haToggle(entity);
     };
   });
 
-  // 2. Also bind .crow .tog buttons where .csub already has the entity ID
-  pc.querySelectorAll('.crow').forEach(row => {
-    const csub = row.querySelector('.csub');
-    const tog  = row.querySelector('.tog');
-    if (!csub || !tog || tog.dataset.entity) return;
-    const txt = csub.textContent.trim();
-    if (!/^[a-z_]+\.[a-z0-9_]+$/.test(txt)) return;
-    const entity = txt;
-    const st = getState(entity);
-    if (st) {
-      const isOn = st.state !== 'off' && st.state !== 'unavailable' && st.state !== 'unknown';
-      tog.classList.toggle('on', isOn);
-      tog.classList.toggle('off', !isOn);
-      const cval = row.querySelector('.cval');
-      if (cval && cval.textContent === '--') cval.textContent = isOn ? 'On' : 'Off';
-    }
-    tog.onclick = (e) => {
-      e.stopPropagation();
-      const isOn = tog.classList.contains('on');
-      tog.classList.toggle('on', !isOn);
-      tog.classList.toggle('off', isOn);
-      const cv = row.querySelector('.cval'); if (cv) cv.textContent = isOn ? 'Off' : 'On';
-      window.haToggle(entity);
-    };
-  });
+  pc.querySelectorAll('[data-script]').forEach(btn => { btn.onclick = () => window.haScript(btn.dataset.script); });
 
-  // 3. Script buttons with data-script attribute
-  pc.querySelectorAll('[data-script]').forEach(btn => {
-    const sid = btn.dataset.script;
-    btn.onclick = () => window.haScript(sid);
-  });
-
-  // 4. AC switches (quiet, fresh air) with data-ac-sw attribute
   pc.querySelectorAll('[data-ac-sw]').forEach(btn => {
     const entity = btn.dataset.acSw;
     const st = getState(entity);
-    if (st) {
-      const isOn = st.state === 'on';
-      if (isOn) btn.style.opacity = '1';
-    }
+    if (st?.state === 'on') btn.style.opacity = '1';
     btn.onclick = () => window.haToggle(entity);
   });
 
-  // 5. AC temperature sliders with data-ac attribute
   pc.querySelectorAll('.tslider[data-ac]').forEach(slider => {
-    const entity = slider.dataset.ac;
-    const st = getState(entity);
+    const entity = slider.dataset.ac; const st = getState(entity);
     const tbig = slider.closest('.ctrl')?.querySelector('.tbig');
     const csub = slider.closest('.ctrl')?.querySelector('.csub');
     if (st) {
-      const setTemp = st.attributes?.temperature;
-      const curTemp = st.attributes?.current_temperature;
-      if (setTemp) {
-        slider.value = setTemp;
-        if (tbig) tbig.textContent = setTemp;
-      }
-      if (csub) {
-        const mode = st.state;
-        if (mode === 'off') {
-          csub.textContent = 'Off';
-        } else {
-          csub.textContent = `Set ${setTemp}°C · Current ${curTemp ?? '--'}°C · ${mode}`;
-        }
-      }
-      // Update AC mode scenes
+      const setTemp = st.attributes?.temperature; const curTemp = st.attributes?.current_temperature;
+      if (setTemp) { slider.value = setTemp; if (tbig) tbig.textContent = setTemp; }
+      if (csub) csub.textContent = st.state === 'off' ? 'Off' : `Set ${setTemp}°C · Current ${curTemp ?? '--'}°C · ${st.state}`;
       const scenes = slider.closest('.ctrl')?.querySelector('.scenes');
       if (scenes) _updateAcScenes(scenes, entity, st.state);
     }
     slider.removeEventListener('change', slider._acChange);
-    slider._acChange = () => window.haClimateTemp(entity, parseInt(slider.value));
+    slider._acChange = () => { window.haClimateTemp(entity, parseInt(slider.value)); if (tbig) tbig.textContent = slider.value; };
     slider.addEventListener('change', slider._acChange);
+    slider.addEventListener('input', () => { if (tbig) tbig.textContent = slider.value; });
   });
 
-  // 6. AC mode scene buttons next to data-ac slider
   pc.querySelectorAll('.ctrl').forEach(ctrl => {
-    const slider = ctrl.querySelector('.tslider[data-ac]');
-    if (!slider) return;
+    const slider = ctrl.querySelector('.tslider[data-ac]'); if (!slider) return;
     const entity = slider.dataset.ac;
-    const scenes = ctrl.querySelector('.scenes');
-    if (!scenes) return;
+    const scenes = ctrl.querySelector('.scenes'); if (!scenes) return;
     const modeMap = { '❄️ Cool':'cool', '💨 Fan':'fan_only', '🌡️ Heat':'heat', 'Off':'off', '⏹ Off':'off' };
     scenes.querySelectorAll('.scene').forEach(btn => {
-      const mode = modeMap[btn.textContent.trim()];
-      if (!mode) return;
-      btn.onclick = () => {
-        window.haClimateMode(entity, mode);
-        _updateAcScenes(scenes, entity, mode);
-      };
+      const mode = modeMap[btn.textContent.trim()]; if (!mode) return;
+      btn.onclick = () => { window.haClimateMode(entity, mode); _updateAcScenes(scenes, entity, mode); };
     });
-  });
-
-  // 7. Binary sensor status in popups
-  pc.querySelectorAll('.crow').forEach(row => {
-    const csub = row.querySelector('.csub');
-    if (!csub) return;
-    const txt = csub.textContent.trim();
-    if (!txt.startsWith('binary_sensor.')) return;
-    const st = getState(txt);
-    if (!st) return;
-    const cval = row.querySelector('.cval');
-    const icon = row.querySelector('span[style*="font-size"]');
-    const isOn = st.state === 'on';
-    if (cval) { cval.textContent = isOn ? 'Active' : 'Clear'; cval.style.color = isOn ? '#f87171' : '#4ade80'; }
-    if (icon) icon.textContent = isOn ? '🔴' : '✅';
   });
 }
 
@@ -762,13 +719,145 @@ function _updateAcScenes(scenes, entity, mode) {
   scenes.querySelectorAll('.scene').forEach(s => {
     const txt = s.textContent.trim();
     const isActive = txt === activeLabel || (mode === 'off' && (txt === 'Off' || txt === '⏹ Off'));
-    s.classList.toggle('on', isActive);
-    s.classList.toggle('off', !isActive);
+    s.classList.toggle('on', isActive); s.classList.toggle('off', !isActive);
   });
 }
 
-// Override pop() to run HA bindings after popup content is loaded
 const _origPop = window.pop;
-if (typeof _origPop === 'function') {
-  window.pop = (id) => { _origPop(id); bindPopupControls(); };
+// pop() is defined in index.html inline as well — override on module load
+document.addEventListener('DOMContentLoaded', () => {
+  // bind app icons from layout
+  const L = window.__layout;
+  if (L?.media?.apps) {
+    document.querySelectorAll('.app').forEach(app => {
+      const appId = app.id?.replace('app-','') || [...app.classList].find(c => c !== 'app');
+      const cfg = L.media.apps.find(a => a.id === appId);
+      if (!cfg) return;
+      if (cfg.actionType === 'input_button') app.onclick = () => window.haInputBtn(cfg.entity);
+      else if (cfg.actionType === 'boolean') app.onclick = () => window.haBoolToggle(cfg.entity);
+      else if (cfg.actionType === 'script') app.onclick = () => window.haScript(cfg.entity);
+    });
+  }
+  // bind TV page app grid
+  document.querySelectorAll('.ta').forEach(ta => {
+    const cls = [...ta.classList].find(c => c !== 'ta');
+    const appMap = { nf:'input_button.netflix', yt:'input_button.youtube', sh:'input_button.shahid', px:'input_button.plex', st:'input_button.stc_tv' };
+    if (appMap[cls]) ta.onclick = () => window.haInputBtn(appMap[cls]);
+    if (cls === 'mk') ta.onclick = () => window.toggleRadio();
+  });
+  // bind guest AC scripts (climate page)
+  document.querySelectorAll('#page-climate .sbtn').forEach(btn => {
+    const scriptMap = { '▶️ Turn ON':'script.guestac_on','⏹ Turn OFF':'script.guestac',
+      '19°C':'script.guesac_temp19','20°C':'script.guesac_temp20','21°C':'script.guesac_temp21',
+      '22°C':'script.guesac_temp22','23°C':'script.guesac_temp23',
+      '▲ Up':'script.guestac_tempup','▼ Down':'script.guesac_tempdown' };
+    const sid = scriptMap[btn.textContent.trim()];
+    if (sid) btn.onclick = () => window.haScript(sid);
+  });
+  // alarm arm buttons
+  document.querySelectorAll('.alm-btn').forEach(btn => {
+    if (btn.classList.contains('alm-away')) btn.onclick = () => { window.alarmPopup?.(); window.almShowPin?.('alarm_arm_away','🚨 Arm Away — press ✓ to confirm'); };
+    if (btn.classList.contains('alm-home')) btn.onclick = () => { window.alarmPopup?.(); window.almShowPin?.('alarm_arm_home','🏠 Arm Home — press ✓ to confirm'); };
+  });
+  // media controls
+  bindMediaControls('media_player.lg_webos_tv_uj670v','.mc-tv');
+  bindMediaControls('media_player.appletv','.mc-atv');
+  bindMediaControls('media_player.homepod_mini','#homepod-card');
+  // TV remote
+  const tvEntity = L?.media?.tvRemote ?? 'media_player.lg_webos_tv_uj670v';
+  document.querySelectorAll('.rk2').forEach(btn => {
+    const t = btn.textContent.trim();
+    if (t.includes('⏮')) btn.onclick = () => window.haMediaCmd(tvEntity,'media_previous_track');
+    if (t.includes('⏸')) btn.onclick = () => window.haMediaCmd(tvEntity,'media_play_pause');
+    if (t.includes('⏭')) btn.onclick = () => window.haMediaCmd(tvEntity,'media_next_track');
+    if (t.includes('Home')) btn.onclick = () => window.haMediaCmd(tvEntity,'select_source',{source:'Home'});
+    if (t.includes('Back')) btn.onclick = () => window.haMediaCmd(tvEntity,'select_source',{source:'Back'});
+    if (t.includes('Mute')) btn.onclick = () => window.haMediaCmd(tvEntity,'volume_mute',{is_volume_muted:true});
+  });
+});
+
+function bindMediaControls(entity, selector) {
+  const card = document.querySelector(selector); if (!card) return;
+  card.querySelectorAll('.mcc').forEach(btn => {
+    const txt = btn.textContent;
+    if (txt==='⏸'||txt==='⏯'||txt==='▶️') btn.onclick = () => window.haMediaCmd(entity,'media_play_pause');
+    if (txt==='⏮') btn.onclick = () => window.haMediaCmd(entity,'media_previous_track');
+    if (txt==='⏭') btn.onclick = () => window.haMediaCmd(entity,'media_next_track');
+    if (txt==='⏹') btn.onclick = () => window.haMediaCmd(entity,'media_stop');
+    if (txt==='🔇') btn.onclick = () => window.haMediaCmd(entity,'volume_mute',{is_volume_muted:true});
+  });
 }
+
+// ── Radio ────────────────────────────────────────────────────────────────────
+const _radioEntity = () => window.__layout?.media?.radioBoolean ?? 'input_boolean.radio_automation';
+window.toggleRadio = () => callHA('input_boolean','toggle', _radioEntity());
+
+// ── Camera ───────────────────────────────────────────────────────────────────
+window.loadCamImages = function() {
+  const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
+  const cameras = window.__layout?.security?.cameras ?? [
+    { id:'doorbell', entity:'camera.g4_doorbell', label:'G4 Doorbell' },
+    { id:'package',  entity:'camera.g4_doorbell_package_camera', label:'Package Cam' },
+  ];
+  cameras.forEach(cam => {
+    const img = document.getElementById(`cam-img-${cam.id}`);
+    const ph  = document.getElementById(`cam-ph-${cam.id}`);
+    if (!img) return;
+    img.onload = () => { img.style.display = 'block'; if (ph) ph.style.display = 'none'; };
+    img.onerror = () => { img.style.display = 'none'; if (ph) ph.style.display = ''; };
+    img.src = `/api/camera/${cam.entity}?token=${encodeURIComponent(tk)}&_=${Date.now()}`;
+  });
+};
+
+window.openCamStream = function(entity, label) {
+  const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
+  const popup = document.getElementById('cam-popup');
+  const video = popup?.querySelector('video');
+  const msg   = document.getElementById('cam-msg');
+  const title = popup?.querySelector('#cam-popup-title');
+  if (!popup || !video) return;
+  if (title) title.textContent = label ?? entity;
+  video.style.display = 'none'; if (msg) msg.textContent = '⏳ Loading stream…';
+  popup.style.display = 'flex';
+  fetch(`/api/camera/${entity}/stream?token=${encodeURIComponent(tk)}`, { headers:{ Authorization:`Bearer ${tk}` } })
+    .then(r => r.json())
+    .then(({ url, error }) => {
+      if (error || !url) { if (msg) msg.textContent = `Error: ${error ?? 'No stream URL'}`; return; }
+      if (msg) msg.textContent = '';
+      if (window.Hls && Hls.isSupported()) {
+        const hls = new Hls(); hls.loadSource(url); hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => { video.style.display = 'block'; video.play().catch(()=>{}); });
+        popup._hls = hls;
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = url; video.style.display = 'block'; video.play().catch(()=>{});
+      } else { if (msg) msg.textContent = 'HLS not supported in this browser'; }
+    })
+    .catch(() => { if (msg) msg.textContent = 'Stream unavailable'; });
+};
+
+// ── Fallback entity lists (used if /api/layout fails) ──────────────────────
+const _FALLBACK_ROOMS = [
+  { id:'lr', name:'Living Room', icon:'🛋️', color:'blue',   visible:true, order:0, lights:['switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509'], ac:'climate.1e05049f', tv:'media_player.lg_webos_tv_uj670v', extras:[] },
+  { id:'bd', name:'Bedroom',     icon:'🛏️', color:'purple', visible:true, order:1, lights:['switch.masterroom_group_switch','switch.master_lights_left','switch.master_bath_left'], ac:'climate.1e050116', extras:[] },
+  { id:'kt', name:'Kitchen',     icon:'🍳', color:'amber',  visible:true, order:2, lights:['switch.kitchen_group_switch','switch.kitchenlights_left','switch.kitchenlights_right','light.wled_2'], extras:[] },
+  { id:'of', name:'Office',      icon:'💼', color:'cyan',   visible:true, order:3, lights:['switch.office_group_swithces','switch.office_light_left','switch.office_light_right'], ac:'climate.1e51b62f', extras:[] },
+  { id:'br', name:'Baby Room',   icon:'👶', color:'pink',   visible:true, order:4, lights:['switch.baby_room'], extras:[] },
+  { id:'gr', name:'Guest Room',  icon:'🚪', color:'green',  visible:true, order:5, lights:['switch.guest_room_switches','switch.guest_light_left','switch.guest_light_right','switch.guest_light_center'], extras:[] },
+  { id:'hw', name:'Hallway',     icon:'🏠', color:'indigo', visible:true, order:6, lights:['switch.hallway_switches','switch.collidor','switch.entrance_light_left','switch.entrance_light_right'], extras:[] },
+  { id:'ln', name:'Laundry',     icon:'🧺', color:'rose',   visible:true, order:7, lights:['switch.laundry_light_left','switch.laundry_light_right'], ac:'climate.1e51bb2c', extras:[] },
+];
+const _FALLBACK_LIGHTS = [
+  'switch.livingroomswitchgroup','light.tv_led','light.yeelight_colorb_0x1b35f509',
+  'switch.kitchenlights_left','switch.kitchenlights_right','light.wled_2',
+  'switch.master_lights_left','switch.master_lights_center','switch.master_lights_right',
+  'switch.master_lights1_left','switch.master_lights1_center','switch.master_lights1_right',
+  'switch.master_bath_left','switch.master_bath_center','switch.master_bath_right',
+  'switch.office_light_left','switch.office_light_right','switch.baby_room',
+  'switch.guest_light_left','switch.guest_light_right','switch.guest_light_center',
+  'switch.hallway_switches','switch.entrance_light_left','switch.entrance_light_right',
+  'switch.collidor','switch.betweenroomslights_left','switch.betweenroomslights_right',
+  'switch.laundry_light_left','switch.laundry_light_right',
+];
+
+// ── Start ────────────────────────────────────────────────────────────────────
+boot();

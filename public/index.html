@@ -1302,10 +1302,29 @@ function initWidgets(){
   });
 }
 
-// Touch swipe to close
+// Touch swipe to close popup
 let sy=0;
-document.getElementById('popup').addEventListener('touchstart',e=>{sy=e.touches[0].clientY;});
-document.getElementById('popup').addEventListener('touchmove',e=>{if(e.touches[0].clientY-sy>70)closeP();});
+document.getElementById('popup').addEventListener('touchstart',e=>{sy=e.touches[0].clientY;},{passive:true});
+document.getElementById('popup').addEventListener('touchmove',e=>{if(e.touches[0].clientY-sy>70)closeP();},{passive:true});
+
+// ── Horizontal swipe to switch pages ──────────────────────────────────────
+(function(){
+  const PAGES=['home','security','climate','tv'];
+  let _sx=0,_sy=0,_st=0;
+  const shell=document.getElementById('shell');
+  shell.addEventListener('touchstart',e=>{
+    _sx=e.touches[0].clientX;_sy=e.touches[0].clientY;_st=Date.now();
+  },{passive:true});
+  shell.addEventListener('touchend',e=>{
+    if(document.getElementById('popup').classList.contains('open'))return;
+    const dx=e.changedTouches[0].clientX-_sx;
+    const dy=e.changedTouches[0].clientY-_sy;
+    if(Math.abs(dx)<55||Math.abs(dx)<Math.abs(dy)*1.4||Date.now()-_st>450)return;
+    const cur=PAGES.findIndex(p=>document.getElementById('page-'+p)?.classList.contains('active'));
+    const nxt=dx<0?Math.min(cur+1,PAGES.length-1):Math.max(cur-1,0);
+    if(nxt!==cur)go(PAGES[nxt]);
+  },{passive:true});
+})();
 
 // ── Nav auto-hide: visible only at bottom of page ──
 (function(){

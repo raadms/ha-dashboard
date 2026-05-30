@@ -133,8 +133,12 @@ textarea{font-size:12px;font-family:'SF Mono',Monaco,monospace;line-height:1.5}
     <!-- LOGIN -->
     <div class="step" id="step-login">
       <div class="field">
+        <label>Username <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— leave blank for admin</span></label>
+        <input type="text" id="uname" placeholder="Leave blank for admin account" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('pwd').focus()"/>
+      </div>
+      <div class="field">
         <label>Password</label>
-        <input type="password" id="pwd" placeholder="Enter your dashboard password" onkeydown="if(event.key==='Enter')doLogin()"/>
+        <input type="password" id="pwd" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
       </div>
 
       <div class="field">
@@ -335,9 +339,10 @@ async function doLogin() {
   btn.disabled = true; spin.classList.add('show'); txt.textContent = 'Signing in…';
 
   try {
+    const uname = document.getElementById('uname').value.trim();
     const res  = await fetch('/api/login', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ password: pwd, duration: _selDur })
+      body: JSON.stringify({ ...(uname ? { username: uname } : {}), password: pwd, duration: _selDur })
     });
     const data = await res.json();
     if (data.token) {
