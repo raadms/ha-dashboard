@@ -9,7 +9,7 @@ window.haClimateTemp = (e,t) => callHA('climate','set_temperature', e, {temperat
 window.haClimateMode = (e,m) => callHA('climate','set_hvac_mode',   e, {hvac_mode:m});
 window.haScript      = (e)   => callHA('script','turn_on', e);
 window.haInputBtn    = (e)   => callHA('input_button','press', e);
-window.haBoolToggle  = (e)   => callHA('input_boolean','toggle', e);
+window.haBoolToggle  = (e)   => callHA(e.split('.')[0],'toggle', e);
 window.haAlarm       = (a, code) => callHA('alarm_control_panel', a, 'alarm_control_panel.alarmo', code ? {code} : {});
 window.haMediaCmd    = (e,a,x={}) => callHA('media_player', a, e, x);
 
@@ -25,7 +25,6 @@ function _getTokenPayload() {
 const _tokenPayload = _getTokenPayload();
 
 let _layout = null;
-let _editMode = false;
 
 async function boot() {
   try {
@@ -71,24 +70,14 @@ function _addUserChip() {
 function _addAdminChips() {
   const chips = document.getElementById('chips');
   if (!chips) return;
-  // Admin panel link
   const adminChip = document.createElement('a');
   adminChip.href = '/admin';
   adminChip.className = 'chip';
   adminChip.style.cssText = 'border-color:rgba(91,141,238,.35);color:#93c5fd;text-decoration:none';
   adminChip.textContent = '⚙️ Admin';
-  // Edit mode toggle
-  const editChip = document.createElement('div');
-  editChip.id = 'edit-chip';
-  editChip.className = 'chip';
-  editChip.style.cssText = 'cursor:pointer;border-color:rgba(251,191,36,.25);color:#fde68a';
-  editChip.textContent = '✏️ Edit Layout';
-  editChip.addEventListener('click', toggleEditMode);
   const spacer = chips.querySelector('.chip-spacer');
-  [adminChip, editChip].forEach(el => {
-    if (spacer) chips.insertBefore(el, spacer);
-    else chips.appendChild(el);
-  });
+  if (spacer) chips.insertBefore(adminChip, spacer);
+  else chips.appendChild(adminChip);
 }
 
 // ── Apply layout to DOM ────────────────────────────────────────────────────
@@ -194,98 +183,21 @@ function renderRooms(rooms) {
           ${hasTv ? `<button class="rbtn rbtn-off" data-action="tv" onclick="E(event)">📺 TV</button>` : ''}
         </div>
       </div>
-      <div class="rh" title="Drag to resize">⟺</div>`;
-    el.addEventListener('click', () => { if (!_editMode) pop(room.id); });
+`;
+    el.addEventListener('click', () => pop(room.id));
     el.querySelectorAll('.rbtn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        if (_editMode) return;
         const action = btn.dataset.action;
         if (action === 'light') window.haToggle(room.lights[0]);
         else if (action === 'ac') window.haClimateMode(room.ac, btn.textContent.includes('Off') ? 'cool' : 'off');
         else if (action === 'tv') window.haToggle(room.tv);
       });
     });
-    // Resize handle drag
-    const rh = el.querySelector('.rh');
-    if (rh) _bindResizeHandle(rh, room);
     rg.appendChild(el);
   }
 }
 
-function _bindResizeHandle(handle, room) {
-  let startX = 0, startColspan = 1;
-
-  function getColCount() {
-    const bps = [...(_layout?.grid?.breakpoints ?? [{ minWidth:0, cols:2 }, { minWidth:768, cols:3 }, { minWidth:1100, cols:4 }])].sort((a,b)=>a.minWidth-b.minWidth);
-    let cols = 2;
-    for (const bp of bps) { if (window.innerWidth >= bp.minWidth) cols = bp.cols; }
-    return cols;
-  }
-
-  function onMove(x) {
-    const rg = document.querySelector('.rg');
-    if (!rg) return;
-    const colW = rg.getBoundingClientRect().width / getColCount();
-    const delta = Math.round((x - startX) / colW);
-    const maxCols = getColCount();
-    const newSpan = Math.max(1, Math.min(maxCols, startColspan + delta));
-    if (newSpan !== (room.colspan || 1)) {
-      room.colspan = newSpan;
-      const card = document.querySelector(`.room.r-${room.id}`);
-      if (card) card.style.gridColumn = newSpan > 1 ? `span ${newSpan}` : '';
-    }
-  }
-
-  function onEnd() {
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onEnd);
-    document.removeEventListener('touchmove', onTouchMove);
-    document.removeEventListener('touchend', onEnd);
-    _saveLayoutSilent();
-  }
-
-  function onMouseMove(e) { onMove(e.clientX); }
-  function onTouchMove(e) { e.preventDefault(); onMove(e.touches[0].clientX); }
-
-  handle.addEventListener('mousedown', e => {
-    if (!_editMode) return;
-    e.stopPropagation(); e.preventDefault();
-    startX = e.clientX; startColspan = room.colspan || 1;
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onEnd);
-  });
-  handle.addEventListener('touchstart', e => {
-    if (!_editMode) return;
-    e.stopPropagation();
-    startX = e.touches[0].clientX; startColspan = room.colspan || 1;
-    document.addEventListener('touchmove', onTouchMove, { passive: false });
-    document.addEventListener('touchend', onEnd);
-  }, { passive: true });
-}
-
-function toggleEditMode() {
-  _editMode = !_editMode;
-  document.body.classList.toggle('ha-edit', _editMode);
-  const chip = document.getElementById('edit-chip');
-  if (chip) {
-    chip.textContent = _editMode ? '✅ Done Editing' : '✏️ Edit Layout';
-    chip.style.cssText = _editMode
-      ? 'cursor:pointer;border-color:rgba(16,185,129,.4);color:#6ee7b7'
-      : 'cursor:pointer;border-color:rgba(251,191,36,.25);color:#fde68a';
-  }
-}
-
-async function _saveLayoutSilent() {
-  if (!_layout) return;
-  try {
-    await fetch('/api/layout', {
-      method: 'PUT',
-      headers: { 'Authorization': `Bearer ${_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(_layout),
-    });
-  } catch { /* silent */ }
-}
 
 function renderSensors(sensors) {
   const row = document.querySelector('.sensor-row');
@@ -450,7 +362,7 @@ document.addEventListener('ha-states-updated', (ev) => {
   if (_npRow) _npRow.style.display = _anyMedia ? '' : 'none';
 
   // radio
-  syncRadio(s['input_boolean.radio_automation']?.state === 'on');
+  syncRadio(s[_radioEntity()]?.state === 'on');
 
   // prayer
   const praySensors = L?.chips?.prayer?.sensors ?? {
@@ -914,8 +826,8 @@ function bindMediaControls(entity, selector) {
 }
 
 // ── Radio ────────────────────────────────────────────────────────────────────
-const _radioEntity = () => window.__layout?.media?.radioBoolean ?? 'input_boolean.radio_automation';
-window.toggleRadio = () => callHA('input_boolean','toggle', _radioEntity());
+const _radioEntity = () => window.__layout?.media?.radioBoolean ?? 'switch.radio_on_sw';
+window.toggleRadio = () => { const e = _radioEntity(); callHA(e.split('.')[0],'toggle',e); };
 
 // ── Camera ───────────────────────────────────────────────────────────────────
 window.loadCamImages = function() {

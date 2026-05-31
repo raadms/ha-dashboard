@@ -317,6 +317,30 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
   <div class="sec" id="sec-layout">
     <div class="sec-hd"><h2>Layout & Tabs</h2><p>Grid columns per screen size, tab names and visibility.</p></div>
     <div class="card">
+      <div class="card-title">Device Presets</div>
+      <p style="font-size:13px;color:var(--muted2);margin-bottom:14px">Pick a device to auto-configure grid columns for that screen width.</p>
+      <div class="row3" style="margin-bottom:12px">
+        <div>
+          <label>Category</label>
+          <select id="dev-cat" onchange="onDevCatChange()">
+            <option value="">— select —</option>
+            <option value="iphone">iPhone</option>
+            <option value="ipad">iPad</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div id="dev-model-wrap" style="display:none">
+          <label>Device</label>
+          <select id="dev-model"></select>
+        </div>
+        <div id="dev-custom-wrap" style="display:none">
+          <label>Screen Width (px)</label>
+          <input id="dev-custom-w" type="number" placeholder="820" min="320" max="2560"/>
+        </div>
+      </div>
+      <button class="btn btn-s btn-sm" onclick="applyDevicePreset()">Apply Preset</button>
+    </div>
+    <div class="card">
       <div class="card-title">Grid Breakpoints</div>
       <table class="bp-tbl">
         <thead><tr><th>Min Width (px)</th><th>Columns</th><th></th></tr></thead>
@@ -465,7 +489,16 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
         <button class="btn btn-s btn-sm" onclick="rmAddLight()">Add</button>
       </div>
     </div>
-    <div class="row2">
+    <div class="row3">
+      <div>
+        <label>Card Width</label>
+        <select id="rm-colspan">
+          <option value="1">1 column (default)</option>
+          <option value="2">2 columns (wide)</option>
+          <option value="3">3 columns</option>
+          <option value="99">Full width</option>
+        </select>
+      </div>
       <div><label>AC Entity (optional)</label><input id="rm-ac" placeholder="climate.living_room"/></div>
       <div><label>TV Entity (optional)</label><input id="rm-tv" placeholder="media_player.lg_tv"/></div>
     </div>
@@ -821,6 +854,7 @@ function openRoomModal(id) {
   document.getElementById('rm-id').value = room.id;
   document.getElementById('rm-ac').value = room.ac || '';
   document.getElementById('rm-tv').value = room.tv || '';
+  document.getElementById('rm-colspan').value = String(room.colspan && room.colspan >= 99 ? 99 : (room.colspan || 1));
 
   const cg = document.getElementById('clr-grid');
   cg.innerHTML = '';
@@ -919,6 +953,8 @@ function saveRoom() {
   if (newId && newId !== room.id && !L.rooms.find(r => r.id === newId)) room.id = newId;
   room.ac = document.getElementById('rm-ac').value.trim() || undefined;
   room.tv = document.getElementById('rm-tv').value.trim() || undefined;
+  const cs = parseInt(document.getElementById('rm-colspan').value);
+  room.colspan = cs > 1 ? cs : undefined;
   const sel = document.querySelector('#clr-grid .clr-sw.sel');
   if (sel) room.color = sel.title;
   dirty(); renderRooms(); closeM('m-room');
@@ -1654,6 +1690,63 @@ function setupAllEntityInputs() {
 }
 
 // ── Reset to Defaults ─────────────────────────────────────────────────────────
+// ── Device Presets ────────────────────────────────────────────────────────────
+const _DEV_PRESETS = {
+  iphone: [
+    { name:'iPhone SE (375px)',            width:375, cols:2 },
+    { name:'iPhone 12/13 mini (375px)',    width:375, cols:2 },
+    { name:'iPhone 14 / 13 / 12 (390px)', width:390, cols:2 },
+    { name:'iPhone 15 / 14 Pro (393px)',   width:393, cols:2 },
+    { name:'iPhone 14 Plus / 13 Pro Max (428px)', width:428, cols:2 },
+    { name:'iPhone 15 Pro Max / 14 Pro Max (430px)', width:430, cols:2 },
+  ],
+  ipad: [
+    { name:'iPad mini 6th gen (744px)',    width:744,  cols:3 },
+    { name:'iPad 10th gen (820px)',        width:820,  cols:3 },
+    { name:'iPad Air 11" M2 (820px)',      width:820,  cols:3 },
+    { name:'iPad Pro 11" (834px)',         width:834,  cols:3 },
+    { name:'iPad Pro 12.9" / 13" M4 (1024px)', width:1024, cols:4 },
+  ],
+};
+
+function onDevCatChange() {
+  const cat = document.getElementById('dev-cat').value;
+  const modelWrap = document.getElementById('dev-model-wrap');
+  const customWrap = document.getElementById('dev-custom-wrap');
+  const modelSel = document.getElementById('dev-model');
+  modelWrap.style.display = 'none';
+  customWrap.style.display = 'none';
+  if (cat === 'custom') {
+    customWrap.style.display = '';
+  } else if (_DEV_PRESETS[cat]) {
+    modelSel.innerHTML = _DEV_PRESETS[cat].map((d,i) => `<option value="${i}">${d.name}</option>`).join('');
+    modelWrap.style.display = '';
+  }
+}
+
+function applyDevicePreset() {
+  const cat = document.getElementById('dev-cat').value;
+  let bps;
+  if (cat === 'custom') {
+    const w = parseInt(document.getElementById('dev-custom-w').value);
+    if (!w || w < 320) { toast('Enter a valid screen width', false); return; }
+    const cols = w >= 1000 ? 4 : w >= 768 ? 3 : 2;
+    bps = [{ minWidth: 0, cols }];
+  } else if (_DEV_PRESETS[cat]) {
+    const idx = parseInt(document.getElementById('dev-model').value);
+    const dev = _DEV_PRESETS[cat][idx];
+    if (!dev) { toast('Select a device', false); return; }
+    bps = [{ minWidth: 0, cols: dev.cols }];
+  } else {
+    toast('Select a category first', false); return;
+  }
+  L.grid = L.grid ?? {};
+  L.grid.breakpoints = bps;
+  dirty();
+  renderBreakpoints();
+  toast('Preset applied — save to confirm ✓');
+}
+
 async function resetToDefaults() {
   if (!confirm('Reset ALL layout settings to factory defaults? This cannot be undone.')) return;
   try {

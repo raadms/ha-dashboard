@@ -184,11 +184,11 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
       { id:'sh', label:'Shahid',      icon:'shahid',   actionType:'input_button', entity:'input_button.shahid'   },
       { id:'px', label:'Plex',        icon:'plex',     actionType:'input_button', entity:'input_button.plex'     },
       { id:'st', label:'STC TV',      icon:'stctv',    actionType:'input_button', entity:'input_button.stc_tv'   },
-      { id:'mk', label:'Radio',       icon:'radio',    actionType:'boolean',      entity:'input_boolean.radio_automation' },
+      { id:'mk', label:'Radio',       icon:'radio',    actionType:'boolean',      entity:'switch.radio_on_sw' },
       { id:'ml', label:'Movie Light', icon:'🎬',       actionType:'boolean',      entity:'input_boolean.movie_light'     },
     ],
     tvRemote: 'media_player.lg_webos_tv_uj670v',
-    radioBoolean: 'input_boolean.radio_automation',
+    radioBoolean: 'switch.radio_on_sw',
   },
   chips: {
     alarm:   { visible: true },
