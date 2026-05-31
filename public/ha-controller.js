@@ -826,7 +826,11 @@ function bindMediaControls(entity, selector) {
 }
 
 // ── Radio ────────────────────────────────────────────────────────────────────
-const _radioEntity = () => window.__layout?.media?.radioBoolean ?? 'switch.radio_on_sw';
+const _radioEntity = () => {
+  const L = window.__layout;
+  const radioApp = L?.media?.apps?.find(a => a.id === 'mk');
+  return radioApp?.entity ?? L?.media?.radioBoolean ?? 'switch.radio_on_sw';
+};
 window.toggleRadio = () => { const e = _radioEntity(); callHA(e.split('.')[0],'toggle',e); };
 
 // ── Camera ───────────────────────────────────────────────────────────────────
