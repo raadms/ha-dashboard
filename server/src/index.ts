@@ -383,21 +383,18 @@ app.get('/api/camera/:entityId/stream', async (req, res) => {
 
   const token = (req.headers.authorization?.slice(7) ?? req.query.token) as string;
   try {
-    const { default: fetch } = await import('node-fetch');
-    const r = await fetch(`${config.haUrl}/api/camera/stream`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${config.haToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entity_id: entityId }),
-    });
-    if (!r.ok) return res.status(502).json({ error: `HA stream API returned ${r.status}` });
-    const data = await r.json() as { url?: string };
-    if (!data.url) return res.status(502).json({ error: 'No stream URL from HA' });
-    const haBase = data.url.replace(/[^/]+$/, '');
+    // Use HA WebSocket camera/stream (works in modern HA; REST /api/camera/stream is removed)
+    const streamUrl = await getHaStreamUrl(entityId);
+    if (!streamUrl) return res.status(502).json({ error: 'No stream URL from HA' });
+    const haBase = streamUrl.replace(/[^/]+$/, '');
     const sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     hlsSessions.set(sid, { haBase, expires: Date.now() + 7_200_000 });
     setTimeout(() => hlsSessions.delete(sid), 7_200_000);
     res.json({ url: `/api/hls/${sid}/index.m3u8?token=${encodeURIComponent(token)}`, type: 'hls-proxied' });
-  } catch { res.status(502).json({ error: 'Could not create stream' }); }
+  } catch (e) {
+    console.error('[HLS stream]', (e as Error).message);
+    res.status(502).json({ error: 'Could not create stream' });
+  }
 });
 
 app.get('/api/hls/:sid/:file', async (req, res) => {
@@ -429,7 +426,39 @@ app.get('/api/hls/:sid/:file', async (req, res) => {
   } catch { res.status(502).send('Segment error'); }
 });
 
-// ── Camera WebRTC (via HA WebSocket / go2rtc) ─────────────────────────────────
+// ── Camera streaming helpers ──────────────────────────────────────────────────
+
+async function haWebSocketCall<T>(payload: Record<string, unknown>): Promise<T> {
+  const config = getConfig();
+  if (!config) throw new Error('Not configured');
+  const wsUrl = config.haUrl.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws') + '/api/websocket';
+  return new Promise((resolve, reject) => {
+    const ws = new WsClient(wsUrl, { rejectUnauthorized: false });
+    const timeout = setTimeout(() => { ws.terminate(); reject(new Error('HA WS timeout')); }, 15_000);
+    let sent = false;
+    ws.on('error', e => { clearTimeout(timeout); reject(e); });
+    ws.on('message', raw => {
+      const msg = JSON.parse(raw.toString()) as { type: string; success?: boolean; result?: T; error?: { message?: string } };
+      if (msg.type === 'auth_required') {
+        ws.send(JSON.stringify({ type: 'auth', access_token: config.haToken }));
+      } else if (msg.type === 'auth_ok' && !sent) {
+        sent = true;
+        ws.send(JSON.stringify({ id: 1, ...payload }));
+      } else if (msg.type === 'result') {
+        clearTimeout(timeout); ws.close();
+        if (msg.success) resolve(msg.result as T);
+        else reject(new Error(msg.error?.message ?? 'HA WS call failed'));
+      }
+    });
+  });
+}
+
+async function getHaStreamUrl(entityId: string): Promise<string | null> {
+  try {
+    const r = await haWebSocketCall<{ url?: string }>({ type: 'camera/stream', entity_id: entityId, format: 'hls' });
+    return r?.url ?? null;
+  } catch { return null; }
+}
 
 async function getHaWebRTCAnswer(entityId: string, sdpOffer: string): Promise<string> {
   const config = getConfig();
