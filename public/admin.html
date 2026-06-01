@@ -287,6 +287,7 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
     <span class="nav-lbl">System</span>
     <div class="nav-item" data-sec="push" onclick="goSec('push')"><span class="ni">🔔</span> Push Notifications</div>
     <div class="nav-item" data-sec="reconfig" onclick="goSec('reconfig')"><span class="ni">🔗</span> HA Connection</div>
+    <div class="nav-item" data-sec="scrypted" onclick="goSec('scrypted')"><span class="ni">📹</span> Scrypted Cameras</div>
   </div>
 
   <div class="nav-grp">
@@ -507,6 +508,28 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
         </button>
       </div>
       <div id="rc-ok" style="display:none;margin-top:12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:10px 13px;font-size:12px;color:#6ee7b7">✅ Connection verified — click Save to apply</div>
+    </div>
+  </div>
+
+  <!-- SCRYPTED -->
+  <div class="sec" id="sec-scrypted">
+    <div class="sec-hd"><h2>Scrypted Cameras</h2><p>Connect to Scrypted for live camera streaming with audio. Once saved, cameras auto-stream via Scrypted.</p></div>
+    <div class="card">
+      <div class="field"><label>Scrypted URL</label><input id="sc-url" placeholder="https://ha.safrani.co:10443" type="url"/></div>
+      <div class="field"><label>Username</label><input id="sc-user" placeholder="dashbard"/></div>
+      <div class="field"><label>Password</label><input id="sc-pass" type="password" placeholder="••••••••"/></div>
+      <div class="err" id="sc-err"></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-p" onclick="saveScrypted()">
+          <span class="spin" id="sc-spin" style="display:none"></span>
+          <span id="sc-txt">Save & Connect</span>
+        </button>
+      </div>
+      <div id="sc-ok" style="display:none;margin-top:12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:10px 13px;font-size:12px;color:#6ee7b7"></div>
+      <div id="sc-cameras" style="display:none;margin-top:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--muted2);margin-bottom:8px">Discovered Cameras</div>
+        <div id="sc-cam-list"></div>
+      </div>
     </div>
   </div>
 
@@ -1848,6 +1871,41 @@ async function saveReconfig() {
     else { errEl.textContent = d.error || 'Save failed'; errEl.className = 'err show'; document.getElementById('rc-save-btn').disabled = false; }
   } catch { errEl.textContent = 'Request failed'; errEl.className = 'err show'; document.getElementById('rc-save-btn').disabled = false; }
   finally { document.getElementById('rc-save-spin').style.display = 'none'; document.getElementById('rc-save-txt').textContent = 'Save'; }
+}
+
+// ── Scrypted ──────────────────────────────────────────────────────────────────
+async function saveScrypted() {
+  const url  = document.getElementById('sc-url').value.trim();
+  const user = document.getElementById('sc-user').value.trim();
+  const pass = document.getElementById('sc-pass').value.trim();
+  const errEl = document.getElementById('sc-err');
+  const okEl  = document.getElementById('sc-ok');
+  errEl.className = 'err';
+  okEl.style.display = 'none';
+  if (!url || !user || !pass) { errEl.textContent = 'All fields required'; errEl.className = 'err show'; return; }
+  document.getElementById('sc-spin').style.display = 'inline-block';
+  document.getElementById('sc-txt').textContent = 'Connecting…';
+  try {
+    const d = await api('POST', '/api/scrypted/config', { scryptedUrl: url, scryptedUsername: user, scryptedPassword: pass });
+    if (!d.ok) { errEl.textContent = d.error || 'Failed'; errEl.className = 'err show'; return; }
+    // Discover cameras
+    const cams = await api('GET', '/api/scrypted/cameras');
+    if (Array.isArray(cams) && cams.length) {
+      const list = document.getElementById('sc-cam-list');
+      list.innerHTML = cams.map(c =>
+        `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,.05);border-radius:8px;margin-bottom:6px;font-size:12px">
+          <span style="font-size:16px">📷</span>
+          <div><div style="font-weight:600;color:#f1f5f9">${c.name}</div><div style="color:var(--muted);margin-top:2px">Device ID: ${c.id}</div></div>
+        </div>`).join('');
+      document.getElementById('sc-cameras').style.display = 'block';
+      okEl.textContent = `✅ Connected — ${cams.length} camera${cams.length > 1 ? 's' : ''} found. Live streaming is now active.`;
+    } else {
+      okEl.textContent = '✅ Credentials saved. No VideoCamera devices found in Scrypted yet.';
+    }
+    okEl.style.display = 'block';
+    toast('Scrypted connected ✓');
+  } catch (e) { errEl.textContent = e.message || 'Request failed'; errEl.className = 'err show'; }
+  finally { document.getElementById('sc-spin').style.display = 'none'; document.getElementById('sc-txt').textContent = 'Save & Connect'; }
 }
 
 // ── Reset to Defaults ─────────────────────────────────────────────────────────
