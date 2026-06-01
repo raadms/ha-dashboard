@@ -1367,23 +1367,15 @@ function dismissAll(){
 
 // ── Camera feeds ──
 function refreshCameras(){
+  if (window.loadCamImages) { window.loadCamImages(); return; }
+  // fallback if ha-controller not yet ready
   const token=sessionStorage.getItem('ha_dash_token');
   if(!token)return;
-  const feeds=[
-    {img:'cam-img-doorbell',ph:'cam-ph-doorbell',entity:'camera.g4_doorbell_pro_poe_high_resolution_channel'},
-    {img:'cam-img-package', ph:'cam-ph-package', entity:'camera.g4_doorbell_pro_poe_package_camera'},
-  ];
-  feeds.forEach(({img,ph,entity})=>{
-    const el=document.getElementById(img);
-    if(!el)return;
+  document.querySelectorAll('.cam-img').forEach(el=>{
+    const entity=el.dataset.entity; if(!entity)return;
     const url=`/api/camera/${entity}?token=${encodeURIComponent(token)}&_t=${Date.now()}`;
     const tmp=new Image();
-    tmp.onload=()=>{
-      el.src=url;el.style.display='block';
-      const phEl=document.getElementById(ph);
-      if(phEl)phEl.style.display='none';
-    };
-    tmp.onerror=()=>{};
+    tmp.onload=()=>{el.src=url;el.style.display='block';const ph=el.previousElementSibling;if(ph?.classList.contains('cam-ph'))ph.style.display='none';};
     tmp.src=url;
   });
 }
@@ -1636,65 +1628,8 @@ function waterPopup(){
   showChipPopup(`<div class="cpop"><div class="cpop-title">💧 Water Filter</div><div class="cpop-row"><span class="cpop-lbl">${isOn?'💧 Running':'⏸ Off'}</span><button class="tog ${isOn?'on tog-g':'off'}" onclick="window.haToggle('switch.athom_smart_plug_v3_50b5b0_power');this.classList.toggle('on');this.classList.toggle('off');"></button></div></div>`);
 }
 
-// ── Camera stream popup ──────────────────────────────────────────────────────
-document.querySelectorAll('.cam').forEach((cam,i)=>{
-  const entities=['camera.g4_doorbell_pro_poe_high_resolution_channel','camera.g4_doorbell_pro_poe_package_camera'];
-  const labels=['G4 Doorbell — Front','G4 Doorbell — Package Cam'];
-  cam.onclick=()=>openCamStream(entities[i],labels[i]);
-});
-
-async function openCamStream(entity,label){
-  const token=sessionStorage.getItem('ha_dash_token');
-  if(!token)return;
-  closeCamPopup();
-  const popup=document.createElement('div');
-  popup.id='cam-popup';
-  popup.innerHTML=`
-    <div class="cam-popup-inner">
-      <div class="cam-popup-hd" id="cam-popup-hd">
-        <span style="color:#fff;font-weight:700;font-size:15px;">${label}</span>
-        <button class="cam-close-btn" onclick="closeCamPopup()">✕</button>
-      </div>
-      <video id="cam-video" controls autoplay playsinline muted style="display:none;width:100%;border-radius:16px;background:#000;max-height:65vh;"></video>
-      <img id="cam-still" style="display:none;width:100%;border-radius:16px;object-fit:contain;max-height:65vh;" />
-      <div id="cam-msg" style="text-align:center;padding:24px;color:var(--muted2);font-size:13px;">⏳ Loading stream…</div>
-    </div>`;
-  document.body.appendChild(popup);
-  try{
-    const r=await fetch(`/api/camera/${entity}/stream?token=${encodeURIComponent(token)}`);
-    const data=await r.json();
-    if(data.url){
-      const video=document.getElementById('cam-video');
-      const msg=document.getElementById('cam-msg');
-      if(msg)msg.style.display='none';
-      if(video){video.style.display='block';video.src=data.url;video.play().catch(()=>{});}
-    }else{
-      _camStillFallback(entity,token);
-    }
-  }catch{
-    _camStillFallback(entity,token);
-  }
-}
-function _camStillFallback(entity,token){
-  const msg=document.getElementById('cam-msg');
-  const still=document.getElementById('cam-still');
-  const hd=document.getElementById('cam-popup-hd');
-  if(!still)return;
-  if(msg)msg.style.display='none';
-  still.style.display='block';
-  if(hd)hd.insertAdjacentHTML('beforeend','<span style="font-size:10px;color:#4ade80;background:rgba(74,222,128,.15);padding:3px 9px;border-radius:50px;border:1px solid rgba(74,222,128,.3);margin-left:8px;">↻ Live</span>');
-  const load=()=>{still.src=`/api/camera/${entity}?token=${encodeURIComponent(token)}&_t=${Date.now()}`;};
-  load();
-  window._camStillInt=setInterval(load,5000);
-}
-function closeCamPopup(){
-  clearInterval(window._camStillInt);
-  const popup=document.getElementById('cam-popup');
-  if(!popup)return;
-  const v=popup.querySelector('video');
-  if(v){v.pause();v.src='';}
-  popup.remove();
-}
+// ── Camera stream popup — handled by ha-controller.js (window.openCamStream) ──
+document.addEventListener('keydown', e => { if (e.key === 'Escape') window.closeCamPopup?.(); });
 </script>
 </body>
 </html>

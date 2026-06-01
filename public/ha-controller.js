@@ -901,30 +901,58 @@ window.loadCamImages = function() {
   });
 };
 
+window.closeCamPopup = function() {
+  clearInterval(window._camStillInt);
+  const popup = document.getElementById('cam-popup');
+  if (!popup) return;
+  if (popup._hls) { popup._hls.destroy(); popup._hls = null; }
+  const v = popup.querySelector('video');
+  if (v) { v.pause(); v.src = ''; v.load(); }
+  popup.remove();
+};
+
 window.openCamStream = function(entity, label) {
   const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
-  const popup = document.getElementById('cam-popup');
-  const video = popup?.querySelector('video');
+  window.closeCamPopup();
+
+  const popup = document.createElement('div');
+  popup.id = 'cam-popup';
+  popup.innerHTML = `
+    <div class="cam-popup-inner">
+      <div class="cam-popup-hd">
+        <span id="cam-popup-title" style="color:#fff;font-weight:700;font-size:15px;">${label ?? entity}</span>
+        <button class="cam-close-btn" onclick="window.closeCamPopup()">✕</button>
+      </div>
+      <video id="cam-video" controls autoplay playsinline style="width:100%;border-radius:16px;background:#000;max-height:70vh;display:none;"></video>
+      <div id="cam-msg" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">⏳ Loading stream…</div>
+    </div>`;
+  document.body.appendChild(popup);
+  popup.addEventListener('click', e => { if (e.target === popup) window.closeCamPopup(); });
+
+  const video = document.getElementById('cam-video');
   const msg   = document.getElementById('cam-msg');
-  const title = popup?.querySelector('#cam-popup-title');
-  if (!popup || !video) return;
-  if (title) title.textContent = label ?? entity;
-  video.style.display = 'none'; if (msg) msg.textContent = '⏳ Loading stream…';
-  popup.style.display = 'flex';
-  fetch(`/api/camera/${entity}/stream?token=${encodeURIComponent(tk)}`, { headers:{ Authorization:`Bearer ${tk}` } })
+
+  fetch(`/api/camera/${entity}/stream`, { headers: { Authorization: `Bearer ${tk}` } })
     .then(r => r.json())
     .then(({ url, error }) => {
-      if (error || !url) { if (msg) msg.textContent = `Error: ${error ?? 'No stream URL'}`; return; }
-      if (msg) msg.textContent = '';
-      if (window.Hls && Hls.isSupported()) {
-        const hls = new Hls(); hls.loadSource(url); hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => { video.style.display = 'block'; video.play().catch(()=>{}); });
+      if (error || !url) { msg.textContent = `Unable to load stream${error ? ': ' + error : ''}`; return; }
+      msg.style.display = 'none';
+      if (window.Hls && window.Hls.isSupported()) {
+        const hls = new window.Hls({ enableWorker: false, lowLatencyMode: true });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(window.Hls.Events.MANIFEST_PARSED, () => { video.style.display = 'block'; video.play().catch(() => {}); });
+        hls.on(window.Hls.Events.ERROR, (_, d) => {
+          if (d.fatal) { msg.style.display = ''; msg.textContent = `Stream error: ${d.details}`; }
+        });
         popup._hls = hls;
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = url; video.style.display = 'block'; video.play().catch(()=>{});
-      } else { if (msg) msg.textContent = 'HLS not supported in this browser'; }
+        video.src = url; video.style.display = 'block'; video.play().catch(() => {});
+      } else {
+        msg.textContent = 'HLS not supported in this browser';
+      }
     })
-    .catch(() => { if (msg) msg.textContent = 'Stream unavailable'; });
+    .catch(() => { msg.textContent = 'Stream unavailable'; });
 };
 
 // ── Fallback entity lists (used if /api/layout fails) ──────────────────────
