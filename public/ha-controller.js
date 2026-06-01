@@ -635,6 +635,8 @@ function syncRadio(isOn) {
   if (dot) dot.style.background = isOn ? '#4ade80' : '#6b7280';
   const ico = document.getElementById('radio-app-ico');
   if (ico) ico.style.opacity = isOn ? '1' : '0.4';
+  const sub = document.getElementById('radio-tv-sub');
+  if (sub) sub.textContent = _radioEntity() + ' · Tap to toggle';
 }
 window.updateRadioToggle = () => {};
 
