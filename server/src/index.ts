@@ -591,20 +591,11 @@ app.post('/api/scrypted/config', async (req, res) => {
   if (!scryptedUrl || !scryptedUsername || !scryptedPassword) {
     return res.status(400).json({ error: 'scryptedUrl, scryptedUsername and scryptedPassword required' });
   }
-  // Verify credentials
+  // Verify credentials by attempting a real token fetch
   try {
-    const { default: fetch } = await import('node-fetch');
-    const r = await fetch(`${scryptedUrl.replace(/\/$/, '')}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: scryptedUsername, password: scryptedPassword }),
-    });
-    if (!r.ok) return res.status(400).json({ error: `Scrypted login failed (${r.status})` });
-    const data = await r.json() as { authorization?: string; queryToken?: { scryptedToken?: string } };
-    if (!data.queryToken?.scryptedToken && !data.authorization) {
-      return res.status(400).json({ error: 'Scrypted did not return a token' });
-    }
-  } catch { return res.status(400).json({ error: 'Could not connect to Scrypted' }); }
+    invalidateScryptedCache();
+    await getScryptedToken(scryptedUrl.replace(/\/$/, ''), scryptedUsername, scryptedPassword);
+  } catch (e) { return res.status(400).json({ error: `Could not connect to Scrypted: ${(e as Error).message}` }); }
 
   const prev = getConfig()!;
   saveConfig({ ...prev, scryptedUrl: scryptedUrl.replace(/\/$/, ''), scryptedUsername, scryptedPassword });

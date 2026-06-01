@@ -1,4 +1,7 @@
 import { WebSocket } from 'ws';
+import https from 'https';
+
+const _tlsAgent = new https.Agent({ rejectUnauthorized: false });
 
 // Minimal Scrypted engine.io RPC client — just enough to get system state
 // and derive rebroadcast HLS URLs for cameras.
@@ -32,7 +35,8 @@ export async function getScryptedToken(baseUrl: string, username: string, passwo
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
-  });
+    agent: _tlsAgent,
+  } as Parameters<typeof fetch>[1]);
   if (!r.ok) throw new Error(`Scrypted login ${r.status}`);
   const data = await r.json() as { authorization?: string; queryToken?: { scryptedToken?: string } };
   const token = data.queryToken?.scryptedToken ?? data.authorization?.replace('Bearer ', '');
