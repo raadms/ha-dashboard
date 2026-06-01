@@ -151,11 +151,13 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
       { id:'stor', entity:'binary_sensor.storagemotionsensor_occupancy',     label:'Storage Motion', icon:'📦', okState:'off', okLabel:'Clear',  warnLabel:'Motion' },
     ],
     cameras: [
-      { id:'doorbell', entity:'camera.g4_doorbell',                label:'G4 Doorbell',  streamType:'ha' },
-      { id:'package',  entity:'camera.g4_doorbell_package_camera', label:'Package Cam',  streamType:'ha' },
+      { id:'doorbell', entity:'camera.g4_doorbell_pro_poe_high_resolution_channel', label:'G4 Doorbell',  streamType:'ha' },
+      { id:'package',  entity:'camera.g4_doorbell_pro_poe_package_camera',          label:'Package Cam',  streamType:'ha' },
     ],
     lock: { entity:'lock.aqara_smart_lock_u200', batteryEntity:'sensor.aqara_smart_lock_u200_battery' },
     nasEntity: 'sensor.cloud_gateway_fiber_storage_utilization',
+    doorbellEntity: 'event.g4_doorbell_pro_poe_doorbell',
+    doorbellCamera: 'camera.g4_doorbell_pro_poe_high_resolution_channel',
   },
   status: {
     lights: [

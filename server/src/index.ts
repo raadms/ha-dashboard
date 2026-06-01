@@ -454,22 +454,22 @@ async function getHaWebRTCAnswer(entityId: string, sdpOffer: string): Promise<st
         ws.send(JSON.stringify({ id: msgId++, type: 'camera/webrtc_offer', entity_id: entityId, offer: sdpOffer }));
 
       } else if (msg.type === 'result') {
-        clearTimeout(timeout);
-        ws.close();
         if (msg.success) {
           // HA returns answer at result.answer or result.sdp
           const r = msg.result ?? {};
           const answer = (r['answer'] ?? r['sdp'] ?? r['answer_sdp']) as string | undefined;
-          if (answer) resolve(answer);
-          else reject(new Error('WebRTC answer missing in result: ' + JSON.stringify(r)));
+          if (answer) { clearTimeout(timeout); ws.close(); resolve(answer); }
+          // else: answer may arrive in a follow-up event — keep connection open
         } else {
+          clearTimeout(timeout); ws.close();
           reject(new Error(msg.error?.message ?? 'WebRTC offer failed'));
         }
 
       } else if (msg.type === 'event') {
-        // Some HA versions send the answer as an event
-        const d = (msg as Record<string, unknown>)['event'] as Record<string, unknown> | undefined;
-        const answer = d?.['answer'] as string | undefined;
+        // Some HA versions send the answer via event (e.g. go2rtc trickle ICE)
+        const ev = (msg as Record<string, unknown>)['event'] as Record<string, unknown> | undefined;
+        const data = (ev?.['data'] ?? ev) as Record<string, unknown> | undefined;
+        const answer = (data?.['answer'] ?? data?.['sdp'] ?? data?.['answer_sdp']) as string | undefined;
         if (answer) { clearTimeout(timeout); ws.close(); resolve(answer); }
       }
     });

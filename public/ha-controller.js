@@ -272,7 +272,7 @@ function renderCameras(cameras) {
     el.className = 'cam';
     el.dataset.camId = cam.id;
     el.innerHTML = `
-      <img class="cam-img" id="cam-img-${cam.id}" alt="${cam.label}">
+      <img class="cam-img" id="cam-img-${cam.id}" data-entity="${cam.entity}" alt="${cam.label}">
       <div class="cam-ph" id="cam-ph-${cam.id}">📷</div>
       <div class="cam-lbl">${cam.label}</div>
       <div class="cam-live"><span class="dlive"></span>LIVE</div>`;
@@ -888,8 +888,8 @@ window.toggleRadio = () => { const e = _radioEntity(); callHA(e.split('.')[0],'t
 window.loadCamImages = function() {
   const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
   const cameras = window.__layout?.security?.cameras ?? [
-    { id:'doorbell', entity:'camera.g4_doorbell', label:'G4 Doorbell' },
-    { id:'package',  entity:'camera.g4_doorbell_package_camera', label:'Package Cam' },
+    { id:'doorbell', entity:'camera.g4_doorbell_pro_poe_high_resolution_channel', label:'G4 Doorbell' },
+    { id:'package',  entity:'camera.g4_doorbell_pro_poe_package_camera',          label:'Package Cam' },
   ];
   cameras.forEach(cam => {
     const img = document.getElementById(`cam-img-${cam.id}`);
