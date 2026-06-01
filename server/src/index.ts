@@ -9,6 +9,7 @@ import { validateUserLogin, signToken, hashPassword, verifyToken } from './auth.
 import { setupWsProxy } from './ws-proxy.js';
 import { isConfigured, loadConfig, saveConfig, getConfig, DATA_DIR } from './config.js';
 import { getLayout, saveLayout, loadLayout, DEFAULT_LAYOUT, type LayoutConfig } from './layout.js';
+import { getScryptedCameras, getScryptedToken, invalidateScryptedCache } from './scrypted.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
@@ -518,55 +519,66 @@ async function getHaWebRTCAnswer(entityId: string, sdpOffer: string): Promise<st
   });
 }
 
-// ── Scrypted token cache ──────────────────────────────────────────────────────
+// ── Scrypted streaming ────────────────────────────────────────────────────────
 
-let _scryptedToken: string | null = null;
-let _scryptedTokenExpiry = 0;
-
-async function getScryptedToken(): Promise<string | null> {
-  if (_scryptedToken && Date.now() < _scryptedTokenExpiry) return _scryptedToken;
+// List Scrypted cameras (admin helper — use to find device IDs)
+app.get('/api/scrypted/cameras', async (req, res) => {
+  const payload = authToken(req);
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
   const config = getConfig();
-  if (!config?.scryptedUrl || !config.scryptedUsername || !config.scryptedPassword) return null;
+  if (!config?.scryptedUrl || !config.scryptedUsername || !config.scryptedPassword) {
+    return res.status(503).json({ error: 'Scrypted not configured' });
+  }
   try {
-    const { default: fetch } = await import('node-fetch');
-    const r = await fetch(`${config.scryptedUrl}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: config.scryptedUsername, password: config.scryptedPassword }),
-    });
-    if (!r.ok) return null;
-    const data = await r.json() as { authorization?: string; queryToken?: { scryptedToken?: string } };
-    const token = data.queryToken?.scryptedToken ?? data.authorization?.replace('Bearer ', '');
-    if (!token) return null;
-    _scryptedToken = token;
-    _scryptedTokenExpiry = Date.now() + 23 * 60 * 60 * 1000; // 23 h
-    return token;
-  } catch { return null; }
-}
+    const cameras = await getScryptedCameras(config.scryptedUrl, config.scryptedUsername, config.scryptedPassword);
+    res.json(cameras);
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
 
-// Scrypted HLS stream endpoint
+// Scrypted HLS stream — auto-discovers device ID by matching camera label
 app.get('/api/camera/:entityId/scrypted-stream', async (req, res) => {
   const payload = authToken(req);
   if (!payload) return res.status(401).json({ error: 'Unauthorized' });
   const entityId = req.params.entityId;
   if (!/^camera\.[a-z0-9_]+$/.test(entityId)) return res.status(400).json({ error: 'Invalid entity' });
-  const layout = getLayout();
-  const cam = layout.security.cameras.find(c => c.entity === entityId);
-  if (!cam?.scryptedId) return res.status(404).json({ error: 'No Scrypted device ID configured for this camera' });
   const config = getConfig();
-  if (!config?.scryptedUrl) return res.status(503).json({ error: 'Scrypted not configured' });
+  if (!config?.scryptedUrl || !config.scryptedUsername || !config.scryptedPassword) {
+    return res.status(503).json({ error: 'Scrypted not configured' });
+  }
 
-  const token = await getScryptedToken();
-  if (!token) return res.status(502).json({ error: 'Could not authenticate with Scrypted' });
+  try {
+    const layout = getLayout();
+    const cam = layout.security.cameras.find(c => c.entity === entityId);
+    const camLabel = cam?.label ?? '';
 
-  const dashToken = (req.headers.authorization?.slice(7) ?? req.query.token) as string;
-  const tokenParam = `scryptedToken=${encodeURIComponent(token)}`;
-  // Scrypted rebroadcast plugin serves HLS at this path
-  const base = `${config.scryptedUrl}/endpoint/@scrypted/rebroadcast/public/${cam.scryptedId}/`;
-  const sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-  hlsSessions.set(sid, { kind: 'scrypted', baseUrl: base, tokenParam, expires: Date.now() + 7_200_000 });
-  setTimeout(() => hlsSessions.delete(sid), 7_200_000);
-  return res.json({ url: `/api/hls/${sid}/stream.m3u8?token=${encodeURIComponent(dashToken)}`, type: 'hls-scrypted' });
+    // Use manually-set scryptedId if available, otherwise auto-discover by name match
+    let deviceId = cam?.scryptedId ?? '';
+    if (!deviceId) {
+      const cameras = await getScryptedCameras(config.scryptedUrl, config.scryptedUsername, config.scryptedPassword);
+      // Match by exact label, then by partial name
+      const match =
+        cameras.find(d => d.name.toLowerCase() === camLabel.toLowerCase()) ??
+        cameras.find(d => d.name.toLowerCase().includes(camLabel.toLowerCase().split(' ')[0])) ??
+        cameras.find(d => camLabel.toLowerCase().includes(d.name.toLowerCase().split(' ')[0])) ??
+        cameras[0]; // last resort: first camera
+      if (!match) return res.status(404).json({ error: 'No Scrypted camera found' });
+      deviceId = match.id;
+    }
+
+    const token = await getScryptedToken(config.scryptedUrl, config.scryptedUsername, config.scryptedPassword);
+    const dashToken = (req.headers.authorization?.slice(7) ?? req.query.token) as string;
+    const tokenParam = `scryptedToken=${encodeURIComponent(token)}`;
+    const base = `${config.scryptedUrl}/endpoint/@scrypted/rebroadcast/public/${deviceId}/`;
+    const sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    hlsSessions.set(sid, { kind: 'scrypted', baseUrl: base, tokenParam, expires: Date.now() + 7_200_000 });
+    setTimeout(() => hlsSessions.delete(sid), 7_200_000);
+    return res.json({ url: `/api/hls/${sid}/stream.m3u8?token=${encodeURIComponent(dashToken)}`, type: 'hls-scrypted' });
+  } catch (e) {
+    console.error('[Scrypted stream]', (e as Error).message);
+    return res.status(502).json({ error: (e as Error).message });
+  }
 });
 
 // Admin: save Scrypted credentials
@@ -596,7 +608,7 @@ app.post('/api/scrypted/config', async (req, res) => {
 
   const prev = getConfig()!;
   saveConfig({ ...prev, scryptedUrl: scryptedUrl.replace(/\/$/, ''), scryptedUsername, scryptedPassword });
-  _scryptedToken = null; // invalidate cache
+  invalidateScryptedCache();
   res.json({ ok: true });
 });
 
