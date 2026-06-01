@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket as WsClient } from 'ws';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
@@ -427,6 +427,69 @@ app.get('/api/hls/:sid/:file', async (req, res) => {
       res.send(rewritten);
     } else { r.body?.pipe(res); }
   } catch { res.status(502).send('Segment error'); }
+});
+
+// ── Camera WebRTC (via HA WebSocket / go2rtc) ─────────────────────────────────
+
+async function getHaWebRTCAnswer(entityId: string, sdpOffer: string): Promise<string> {
+  const config = getConfig();
+  if (!config) throw new Error('Not configured');
+  const wsUrl = config.haUrl.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws') + '/api/websocket';
+
+  return new Promise((resolve, reject) => {
+    const ws = new WsClient(wsUrl, { rejectUnauthorized: false });
+    const timeout = setTimeout(() => { ws.terminate(); reject(new Error('WebRTC signaling timeout')); }, 20_000);
+    let msgId = 1;
+
+    ws.on('error', e => { clearTimeout(timeout); reject(e); });
+
+    ws.on('message', raw => {
+      type HaMsg = { type: string; success?: boolean; result?: Record<string, unknown>; error?: { message?: string } };
+      const msg = JSON.parse(raw.toString()) as HaMsg;
+
+      if (msg.type === 'auth_required') {
+        ws.send(JSON.stringify({ type: 'auth', access_token: config.haToken }));
+
+      } else if (msg.type === 'auth_ok') {
+        ws.send(JSON.stringify({ id: msgId++, type: 'camera/webrtc_offer', entity_id: entityId, offer: sdpOffer }));
+
+      } else if (msg.type === 'result') {
+        clearTimeout(timeout);
+        ws.close();
+        if (msg.success) {
+          // HA returns answer at result.answer or result.sdp
+          const r = msg.result ?? {};
+          const answer = (r['answer'] ?? r['sdp'] ?? r['answer_sdp']) as string | undefined;
+          if (answer) resolve(answer);
+          else reject(new Error('WebRTC answer missing in result: ' + JSON.stringify(r)));
+        } else {
+          reject(new Error(msg.error?.message ?? 'WebRTC offer failed'));
+        }
+
+      } else if (msg.type === 'event') {
+        // Some HA versions send the answer as an event
+        const d = (msg as Record<string, unknown>)['event'] as Record<string, unknown> | undefined;
+        const answer = d?.['answer'] as string | undefined;
+        if (answer) { clearTimeout(timeout); ws.close(); resolve(answer); }
+      }
+    });
+  });
+}
+
+app.post('/api/camera/:entityId/webrtc-offer', async (req, res) => {
+  const payload = authToken(req);
+  if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+  const entityId = req.params.entityId;
+  if (!/^camera\.[a-z0-9_]+$/.test(entityId)) return res.status(400).json({ error: 'Invalid entity' });
+  const { offer } = req.body as { offer?: string };
+  if (!offer) return res.status(400).json({ error: 'offer required' });
+  try {
+    const answer = await getHaWebRTCAnswer(entityId, offer);
+    res.json({ answer });
+  } catch (e) {
+    console.error('[WebRTC]', (e as Error).message);
+    res.status(502).json({ error: (e as Error).message });
+  }
 });
 
 // ── Setup redirect + static ───────────────────────────────────────────────────

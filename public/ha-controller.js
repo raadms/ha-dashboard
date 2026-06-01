@@ -906,15 +906,14 @@ window.closeCamPopup = function() {
   const popup = document.getElementById('cam-popup');
   if (!popup) return;
   if (popup._hls) { popup._hls.destroy(); popup._hls = null; }
+  if (popup._pc)  { popup._pc.close();    popup._pc  = null; }
   const v = popup.querySelector('video');
-  if (v) { v.pause(); v.src = ''; v.load(); }
+  if (v) { v.pause(); v.srcObject = null; v.src = ''; v.load(); }
   popup.remove();
 };
 
-window.openCamStream = function(entity, label) {
-  const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
+function _camPopupShell(label, entity) {
   window.closeCamPopup();
-
   const popup = document.createElement('div');
   popup.id = 'cam-popup';
   popup.innerHTML = `
@@ -923,36 +922,100 @@ window.openCamStream = function(entity, label) {
         <span id="cam-popup-title" style="color:#fff;font-weight:700;font-size:15px;">${label ?? entity}</span>
         <button class="cam-close-btn" onclick="window.closeCamPopup()">✕</button>
       </div>
-      <video id="cam-video" controls autoplay playsinline style="width:100%;border-radius:16px;background:#000;max-height:70vh;display:none;"></video>
-      <div id="cam-msg" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">⏳ Loading stream…</div>
+      <video id="cam-video" autoplay playsinline controls
+        style="width:100%;border-radius:16px;background:#000;max-height:70vh;display:none;"></video>
+      <div id="cam-msg" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">⏳ Connecting…</div>
     </div>`;
   document.body.appendChild(popup);
   popup.addEventListener('click', e => { if (e.target === popup) window.closeCamPopup(); });
+  return popup;
+}
 
+function _camMjpegFallback(popup, entity, tk) {
+  const video = document.getElementById('cam-video');
+  const msg   = document.getElementById('cam-msg');
+  if (video) video.style.display = 'none';
+  if (popup._pc) { popup._pc.close(); popup._pc = null; }
+
+  const img = document.createElement('img');
+  img.style.cssText = 'width:100%;border-radius:16px;object-fit:contain;max-height:70vh;display:block;';
+  if (msg) { msg.style.display = 'none'; popup.querySelector('.cam-popup-inner').insertBefore(img, msg); }
+
+  const title = document.getElementById('cam-popup-title');
+  if (title && !title.nextElementSibling?.classList?.contains('cam-snap-badge')) {
+    title.insertAdjacentHTML('afterend',
+      '<span class="cam-snap-badge" style="font-size:10px;color:#4ade80;background:rgba(74,222,128,.15);padding:3px 9px;border-radius:50px;border:1px solid rgba(74,222,128,.3);margin-left:8px;">↻ Snapshot</span>');
+  }
+
+  const load = () => { img.src = `/api/camera/${entity}?token=${encodeURIComponent(tk)}&_t=${Date.now()}`; };
+  load();
+  window._camStillInt = setInterval(load, 3000);
+}
+
+window.openCamStream = async function(entity, label) {
+  const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
+  const popup = _camPopupShell(label, entity);
   const video = document.getElementById('cam-video');
   const msg   = document.getElementById('cam-msg');
 
-  fetch(`/api/camera/${entity}/stream`, { headers: { Authorization: `Bearer ${tk}` } })
-    .then(r => r.json())
-    .then(({ url, error }) => {
-      if (error || !url) { msg.textContent = `Unable to load stream${error ? ': ' + error : ''}`; return; }
-      msg.style.display = 'none';
-      if (window.Hls && window.Hls.isSupported()) {
-        const hls = new window.Hls({ enableWorker: false, lowLatencyMode: true });
-        hls.loadSource(url);
-        hls.attachMedia(video);
-        hls.on(window.Hls.Events.MANIFEST_PARSED, () => { video.style.display = 'block'; video.play().catch(() => {}); });
-        hls.on(window.Hls.Events.ERROR, (_, d) => {
-          if (d.fatal) { msg.style.display = ''; msg.textContent = `Stream error: ${d.details}`; }
-        });
-        popup._hls = hls;
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = url; video.style.display = 'block'; video.play().catch(() => {});
-      } else {
-        msg.textContent = 'HLS not supported in this browser';
+  try {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
+    });
+    popup._pc = pc;
+
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    // Gather ICE candidates (up to 5 s)
+    await new Promise(resolve => {
+      if (pc.iceGatheringState === 'complete') return resolve(null);
+      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(null); };
+      setTimeout(resolve, 5000, null);
+    });
+
+    const r = await fetch(`/api/camera/${entity}/webrtc-offer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tk}` },
+      body: JSON.stringify({ offer: pc.localDescription?.sdp }),
+    });
+    const data = await r.json();
+    if (data.error || !data.answer) throw new Error(data.error ?? 'No WebRTC answer');
+
+    await pc.setRemoteDescription({ type: 'answer', sdp: data.answer });
+
+    // If no video track arrives in 10 s, fall back to snapshots
+    const fallbackTimer = setTimeout(() => {
+      if (video && video.style.display === 'none') _camMjpegFallback(popup, entity, tk);
+    }, 10_000);
+
+    pc.ontrack = e => {
+      clearTimeout(fallbackTimer);
+      if (!video.srcObject) {
+        video.srcObject = new MediaStream();
+        msg.style.display = 'none';
+        video.style.display = 'block';
+        video.play().catch(() => {});
       }
-    })
-    .catch(() => { msg.textContent = 'Stream unavailable'; });
+      video.srcObject.addTrack(e.track);
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        clearTimeout(fallbackTimer);
+        _camMjpegFallback(popup, entity, tk);
+      }
+    };
+
+  } catch {
+    _camMjpegFallback(popup, entity, tk);
+  }
 };
 
 // ── Fallback entity lists (used if /api/layout fails) ──────────────────────
