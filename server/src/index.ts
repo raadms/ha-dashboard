@@ -32,7 +32,11 @@ function saveSubs(subs: PushSub[]): void {
   writeFileSync(SUBS_FILE, JSON.stringify(subs, null, 2), { mode: 0o600 });
 }
 
-const hlsSessions = new Map<string, { haBase: string; expires: number }>();
+type HlsSession =
+  | { kind: 'ha';       haBase: string;  expires: number }
+  | { kind: 'scrypted'; baseUrl: string; tokenParam: string; expires: number };
+
+const hlsSessions = new Map<string, HlsSession>();
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -388,7 +392,7 @@ app.get('/api/camera/:entityId/stream', async (req, res) => {
     if (!streamUrl) return res.status(502).json({ error: 'No stream URL from HA' });
     const haBase = streamUrl.replace(/[^/]+$/, '');
     const sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    hlsSessions.set(sid, { haBase, expires: Date.now() + 7_200_000 });
+    hlsSessions.set(sid, { kind: 'ha', haBase, expires: Date.now() + 7_200_000 });
     setTimeout(() => hlsSessions.delete(sid), 7_200_000);
     res.json({ url: `/api/hls/${sid}/index.m3u8?token=${encodeURIComponent(token)}`, type: 'hls-proxied' });
   } catch (e) {
@@ -409,7 +413,16 @@ app.get('/api/hls/:sid/:file', async (req, res) => {
   const token = (req.headers.authorization?.slice(7) ?? req.query.token) as string;
   try {
     const { default: fetch } = await import('node-fetch');
-    const r = await fetch(`${config.haUrl}${session.haBase}${file}`, { headers: { Authorization: `Bearer ${config.haToken}` } });
+    let upstreamUrl: string;
+    let headers: Record<string, string>;
+    if (session.kind === 'ha') {
+      upstreamUrl = `${config.haUrl}${session.haBase}${file}`;
+      headers = { Authorization: `Bearer ${config.haToken}` };
+    } else {
+      upstreamUrl = `${session.baseUrl}${file}?${session.tokenParam}`;
+      headers = {};
+    }
+    const r = await fetch(upstreamUrl, { headers });
     if (!r.ok) return res.status(r.status).send('Upstream error');
     const ct = r.headers.get('content-type') ?? 'application/octet-stream';
     res.setHeader('Content-Type', ct);
@@ -504,6 +517,88 @@ async function getHaWebRTCAnswer(entityId: string, sdpOffer: string): Promise<st
     });
   });
 }
+
+// ── Scrypted token cache ──────────────────────────────────────────────────────
+
+let _scryptedToken: string | null = null;
+let _scryptedTokenExpiry = 0;
+
+async function getScryptedToken(): Promise<string | null> {
+  if (_scryptedToken && Date.now() < _scryptedTokenExpiry) return _scryptedToken;
+  const config = getConfig();
+  if (!config?.scryptedUrl || !config.scryptedUsername || !config.scryptedPassword) return null;
+  try {
+    const { default: fetch } = await import('node-fetch');
+    const r = await fetch(`${config.scryptedUrl}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: config.scryptedUsername, password: config.scryptedPassword }),
+    });
+    if (!r.ok) return null;
+    const data = await r.json() as { authorization?: string; queryToken?: { scryptedToken?: string } };
+    const token = data.queryToken?.scryptedToken ?? data.authorization?.replace('Bearer ', '');
+    if (!token) return null;
+    _scryptedToken = token;
+    _scryptedTokenExpiry = Date.now() + 23 * 60 * 60 * 1000; // 23 h
+    return token;
+  } catch { return null; }
+}
+
+// Scrypted HLS stream endpoint
+app.get('/api/camera/:entityId/scrypted-stream', async (req, res) => {
+  const payload = authToken(req);
+  if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+  const entityId = req.params.entityId;
+  if (!/^camera\.[a-z0-9_]+$/.test(entityId)) return res.status(400).json({ error: 'Invalid entity' });
+  const layout = getLayout();
+  const cam = layout.security.cameras.find(c => c.entity === entityId);
+  if (!cam?.scryptedId) return res.status(404).json({ error: 'No Scrypted device ID configured for this camera' });
+  const config = getConfig();
+  if (!config?.scryptedUrl) return res.status(503).json({ error: 'Scrypted not configured' });
+
+  const token = await getScryptedToken();
+  if (!token) return res.status(502).json({ error: 'Could not authenticate with Scrypted' });
+
+  const dashToken = (req.headers.authorization?.slice(7) ?? req.query.token) as string;
+  const tokenParam = `scryptedToken=${encodeURIComponent(token)}`;
+  // Scrypted rebroadcast plugin serves HLS at this path
+  const base = `${config.scryptedUrl}/endpoint/@scrypted/rebroadcast/public/${cam.scryptedId}/`;
+  const sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  hlsSessions.set(sid, { kind: 'scrypted', baseUrl: base, tokenParam, expires: Date.now() + 7_200_000 });
+  setTimeout(() => hlsSessions.delete(sid), 7_200_000);
+  return res.json({ url: `/api/hls/${sid}/stream.m3u8?token=${encodeURIComponent(dashToken)}`, type: 'hls-scrypted' });
+});
+
+// Admin: save Scrypted credentials
+app.post('/api/scrypted/config', async (req, res) => {
+  const payload = authToken(req);
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const { scryptedUrl, scryptedUsername, scryptedPassword } = req.body as {
+    scryptedUrl?: string; scryptedUsername?: string; scryptedPassword?: string;
+  };
+  if (!scryptedUrl || !scryptedUsername || !scryptedPassword) {
+    return res.status(400).json({ error: 'scryptedUrl, scryptedUsername and scryptedPassword required' });
+  }
+  // Verify credentials
+  try {
+    const { default: fetch } = await import('node-fetch');
+    const r = await fetch(`${scryptedUrl.replace(/\/$/, '')}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: scryptedUsername, password: scryptedPassword }),
+    });
+    if (!r.ok) return res.status(400).json({ error: `Scrypted login failed (${r.status})` });
+    const data = await r.json() as { authorization?: string; queryToken?: { scryptedToken?: string } };
+    if (!data.queryToken?.scryptedToken && !data.authorization) {
+      return res.status(400).json({ error: 'Scrypted did not return a token' });
+    }
+  } catch { return res.status(400).json({ error: 'Could not connect to Scrypted' }); }
+
+  const prev = getConfig()!;
+  saveConfig({ ...prev, scryptedUrl: scryptedUrl.replace(/\/$/, ''), scryptedUsername, scryptedPassword });
+  _scryptedToken = null; // invalidate cache
+  res.json({ ok: true });
+});
 
 app.post('/api/camera/:entityId/webrtc-offer', async (req, res) => {
   const payload = authToken(req);

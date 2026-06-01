@@ -43,6 +43,7 @@ export interface CameraConfig {
   label: string;
   streamUrl?: string;   // direct HLS URL (e.g. from Scrypted)
   streamType?: 'hls' | 'ha'; // 'hls' = use streamUrl directly, 'ha' = proxy via HA
+  scryptedId?: string;  // Scrypted device ID (numeric string, found in Scrypted URL: /#/device/{id})
 }
 
 export interface MediaPlayerConfig {

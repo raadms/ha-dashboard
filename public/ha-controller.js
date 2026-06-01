@@ -952,6 +952,40 @@ function _camMjpegFallback(popup, entity, tk) {
   window._camStillInt = setInterval(load, 3000);
 }
 
+async function _tryScryptedFallback(popup, entity, tk) {
+  try {
+    const r = await fetch(`/api/camera/${entity}/scrypted-stream`, { headers: { Authorization: `Bearer ${tk}` } });
+    const data = await r.json();
+    if (data.error || !data.url) throw new Error(data.error ?? 'no url');
+    // Reuse HLS playback logic
+    const video = document.getElementById('cam-video');
+    const msg   = document.getElementById('cam-msg');
+    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: false });
+      popup._hls = hls;
+      hls.loadSource(data.url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (msg) msg.style.display = 'none';
+        video.style.display = 'block';
+        video.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, (_e, d) => {
+        if (d.fatal) { hls.destroy(); popup._hls = null; _tryHlsFallback(popup, entity, tk); }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = data.url;
+      video.style.display = 'block';
+      if (msg) msg.style.display = 'none';
+      video.play().catch(() => {});
+    } else {
+      throw new Error('HLS not supported');
+    }
+  } catch {
+    _tryHlsFallback(popup, entity, tk);
+  }
+}
+
 async function _tryHlsFallback(popup, entity, tk) {
   const video = document.getElementById('cam-video');
   const msg   = document.getElementById('cam-msg');
@@ -1025,11 +1059,11 @@ window.openCamStream = async function(entity, label) {
 
     await pc.setRemoteDescription({ type: 'answer', sdp: data.answer });
 
-    // If no video track arrives in 10 s, try HLS then snapshots
+    // If no video track arrives in 10 s, try Scrypted HLS → HA HLS → snapshots
     const fallbackTimer = setTimeout(() => {
       if (video && video.style.display === 'none') {
         pc.close(); popup._pc = null;
-        _tryHlsFallback(popup, entity, tk);
+        _tryScryptedFallback(popup, entity, tk);
       }
     }, 10_000);
 
@@ -1047,12 +1081,12 @@ window.openCamStream = async function(entity, label) {
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         clearTimeout(fallbackTimer);
-        _tryHlsFallback(popup, entity, tk);
+        _tryScryptedFallback(popup, entity, tk);
       }
     };
 
   } catch {
-    _tryHlsFallback(popup, entity, tk);
+    _tryScryptedFallback(popup, entity, tk);
   }
 };
 

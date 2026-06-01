@@ -13,6 +13,9 @@ export interface AppConfig {
   vapidPublicKey?: string;
   vapidPrivateKey?: string;
   pushWebhookSecret?: string;
+  scryptedUrl?: string;
+  scryptedUsername?: string;
+  scryptedPassword?: string;
   // legacy — present in old config files, never written again
   passwordHash?: string;
 }
