@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { getConfig } from './config.js';
 import { getLayout } from './layout.js';
 
 const JWT_SECRET = process.env.JWT_SECRET ?? crypto.randomUUID() + crypto.randomUUID();
@@ -17,27 +16,25 @@ export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
 }
 
-export async function validatePassword(password: string): Promise<boolean> {
-  const config = getConfig();
-  if (!config) return false;
-  return bcrypt.compare(password, config.passwordHash);
-}
-
-// Validate login: 'admin' username (or blank) → main admin password; others → named users
-export async function validateUserLogin(username: string | undefined, password: string): Promise<TokenPayload | null> {
-  const isAdminLogin = !username || username.toLowerCase() === 'admin';
-  if (!isAdminLogin) {
-    const layout = getLayout();
-    const user = layout.users.find(u => u.name.toLowerCase() === username!.toLowerCase() || u.id === username);
-    if (user && await bcrypt.compare(password, user.passwordHash)) {
-      return { userId: user.id, name: user.name, role: user.role, allowedRooms: user.allowedRooms, allowedTabs: user.allowedTabs };
-    }
-    return null;
-  }
-  if (await validatePassword(password)) {
-    return { userId: 'admin', name: 'Admin', role: 'admin', allowedRooms: null, allowedTabs: null };
-  }
-  return null;
+// All auth goes through the users array — no separate admin password
+export async function validateUserLogin(username: string, password: string): Promise<TokenPayload | null> {
+  const layout = getLayout();
+  const uname = username.trim().toLowerCase();
+  // Match by username field (new), then name (legacy), then id
+  const user = layout.users.find(u =>
+    (u.username ?? u.name).toLowerCase() === uname ||
+    u.name.toLowerCase() === uname ||
+    u.id === uname
+  );
+  if (!user) return null;
+  if (!await bcrypt.compare(password, user.passwordHash)) return null;
+  return {
+    userId: user.id,
+    name: user.name,
+    role: user.role,
+    allowedRooms: user.allowedRooms,
+    allowedTabs: user.allowedTabs,
+  };
 }
 
 const DURATION_MAP = {

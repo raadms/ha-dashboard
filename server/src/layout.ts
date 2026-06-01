@@ -41,6 +41,8 @@ export interface CameraConfig {
   id: string;
   entity: string;
   label: string;
+  streamUrl?: string;   // direct HLS URL (e.g. from Scrypted)
+  streamType?: 'hls' | 'ha'; // 'hls' = use streamUrl directly, 'ha' = proxy via HA
 }
 
 export interface MediaPlayerConfig {
@@ -61,6 +63,7 @@ export interface AppConfig {
 export interface UserConfig {
   id: string;
   name: string;
+  username: string;     // login identifier (separate from display name)
   passwordHash: string;
   role: 'admin' | 'user';
   allowedRooms: string[] | null;
@@ -146,8 +149,8 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
       { id:'stor', entity:'binary_sensor.storagemotionsensor_occupancy',     label:'Storage Motion', icon:'📦', okState:'off', okLabel:'Clear',  warnLabel:'Motion' },
     ],
     cameras: [
-      { id:'doorbell', entity:'camera.g4_doorbell',                  label:'G4 Doorbell' },
-      { id:'package',  entity:'camera.g4_doorbell_package_camera',   label:'Package Cam' },
+      { id:'doorbell', entity:'camera.g4_doorbell',                label:'G4 Doorbell',  streamType:'ha' },
+      { id:'package',  entity:'camera.g4_doorbell_package_camera', label:'Package Cam',  streamType:'ha' },
     ],
     lock: { entity:'lock.aqara_smart_lock_u200', batteryEntity:'sensor.aqara_smart_lock_u200_battery' },
     nasEntity: 'sensor.cloud_gateway_fiber_storage_utilization',
@@ -185,7 +188,7 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
       { id:'px', label:'Plex',        icon:'plex',     actionType:'input_button', entity:'input_button.plex'     },
       { id:'st', label:'STC TV',      icon:'stctv',    actionType:'input_button', entity:'input_button.stc_tv'   },
       { id:'mk', label:'Radio',       icon:'radio',    actionType:'boolean',      entity:'switch.radio_on_sw' },
-      { id:'ml', label:'Movie Light', icon:'🎬',       actionType:'boolean',      entity:'input_boolean.movie_light'     },
+      { id:'ml', label:'Movie Light', icon:'🎬',       actionType:'boolean',      entity:'input_boolean.movie_light' },
     ],
     tvRemote: 'media_player.lg_webos_tv_uj670v',
     radioBoolean: 'switch.radio_on_sw',
@@ -209,7 +212,15 @@ let _layout: LayoutConfig | null = null;
 export function loadLayout(): LayoutConfig {
   if (!existsSync(LAYOUT_FILE)) return _layout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT)) as LayoutConfig;
   try {
-    _layout = JSON.parse(readFileSync(LAYOUT_FILE, 'utf-8')) as LayoutConfig;
+    const raw = JSON.parse(readFileSync(LAYOUT_FILE, 'utf-8')) as LayoutConfig;
+    // Migration: ensure every user has a username field
+    if (raw.users) {
+      raw.users = raw.users.map(u => ({
+        ...u,
+        username: u.username ?? u.name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+      }));
+    }
+    _layout = raw;
     return _layout;
   } catch {
     return _layout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT)) as LayoutConfig;

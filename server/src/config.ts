@@ -3,14 +3,18 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR ?? join(__dirname, '../../../data');
+export const DATA_DIR = process.env.DATA_DIR ?? join(__dirname, '../../../data');
 const CONFIG_FILE = join(DATA_DIR, 'config.json');
 
 export interface AppConfig {
   haUrl: string;
   haToken: string;
-  passwordHash: string;
   dashboardName: string;
+  vapidPublicKey?: string;
+  vapidPrivateKey?: string;
+  pushWebhookSecret?: string;
+  // legacy — present in old config files, never written again
+  passwordHash?: string;
 }
 
 let _config: AppConfig | null = null;
@@ -35,6 +39,9 @@ export function getConfig(): AppConfig | null {
 
 export function saveConfig(config: AppConfig): void {
   mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 });
-  _config = config;
+  // Never persist the legacy passwordHash
+  const { passwordHash: _legacy, ...clean } = config;
+  void _legacy;
+  writeFileSync(CONFIG_FILE, JSON.stringify(clean, null, 2), { mode: 0o600 });
+  _config = clean as AppConfig;
 }

@@ -3,12 +3,11 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import {
-  validateUserLogin, signToken, hashPassword,
-  verifyToken,
-} from './auth.js';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import webpush from 'web-push';
+import { validateUserLogin, signToken, hashPassword, verifyToken } from './auth.js';
 import { setupWsProxy } from './ws-proxy.js';
-import { isConfigured, loadConfig, saveConfig, getConfig } from './config.js';
+import { isConfigured, loadConfig, saveConfig, getConfig, DATA_DIR } from './config.js';
 import { getLayout, saveLayout, loadLayout, DEFAULT_LAYOUT, type LayoutConfig } from './layout.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -17,6 +16,21 @@ const PUBLIC_DIR = join(__dirname, '../../public');
 
 loadConfig();
 loadLayout();
+
+// ── Push subscriptions ────────────────────────────────────────────────────────
+const SUBS_FILE = join(DATA_DIR, 'push_subscriptions.json');
+
+type PushSub = { endpoint: string; keys: { auth: string; p256dh: string } };
+
+function loadSubs(): PushSub[] {
+  if (!existsSync(SUBS_FILE)) return [];
+  try { return JSON.parse(readFileSync(SUBS_FILE, 'utf-8')) as PushSub[]; } catch { return []; }
+}
+
+function saveSubs(subs: PushSub[]): void {
+  mkdirSync(DATA_DIR, { recursive: true });
+  writeFileSync(SUBS_FILE, JSON.stringify(subs, null, 2), { mode: 0o600 });
+}
 
 const hlsSessions = new Map<string, { haBase: string; expires: number }>();
 
@@ -46,9 +60,13 @@ function authToken(req: express.Request): ReturnType<typeof verifyToken> {
   return token ? verifyToken(token) : null;
 }
 
-// ── Setup & config ──────────────────────────────────────────────────────────
+// ── Setup & config ────────────────────────────────────────────────────────────
 
-app.get('/api/setup-status', (_req, res) => res.json({ configured: isConfigured() }));
+app.get('/api/setup-status', (_req, res) => {
+  const configured = isConfigured();
+  const hasUsers = getLayout().users.length > 0;
+  res.json({ configured, hasUsers, needsSetup: !configured || !hasUsers });
+});
 
 app.get('/api/config', (_req, res) => {
   const config = getConfig();
@@ -67,19 +85,54 @@ app.post('/api/test-ha', async (req, res) => {
 });
 
 app.post('/api/setup', async (req, res) => {
-  if (isConfigured()) return res.status(403).json({ error: 'Already configured' });
-  const { haUrl, haToken, password, dashboardName } = req.body as {
-    haUrl?: string; haToken?: string; password?: string; dashboardName?: string;
+  // Block if users already exist
+  const layout = getLayout();
+  if (layout.users.length > 0) return res.status(403).json({ error: 'Already set up' });
+
+  const { haUrl, haToken, dashboardName, name, username, password } = req.body as {
+    haUrl?: string; haToken?: string; dashboardName?: string;
+    name?: string; username?: string; password?: string;
   };
-  if (!haUrl || !haToken || !password) return res.status(400).json({ error: 'haUrl, haToken and password are required' });
+
+  if (!name || !username || !password) return res.status(400).json({ error: 'Name, username and password required' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  try {
-    const { default: fetch } = await import('node-fetch');
-    const test = await fetch(`${haUrl.replace(/\/$/, '')}/api/`, { headers: { Authorization: `Bearer ${haToken}` } });
-    if (!test.ok) return res.status(400).json({ error: 'HA token invalid or HA unreachable' });
-  } catch { return res.status(400).json({ error: 'Could not connect to Home Assistant' }); }
-  const passwordHash = await hashPassword(password);
-  saveConfig({ haUrl: haUrl.replace(/\/$/, ''), haToken, passwordHash, dashboardName: dashboardName ?? 'Safrani Home' });
+
+  // Configure HA only if not already done
+  if (!isConfigured()) {
+    if (!haUrl || !haToken) return res.status(400).json({ error: 'HA URL and token required' });
+    try {
+      const { default: fetch } = await import('node-fetch');
+      const test = await fetch(`${haUrl.replace(/\/$/, '')}/api/`, { headers: { Authorization: `Bearer ${haToken}` } });
+      if (!test.ok) return res.status(400).json({ error: 'HA token invalid or HA unreachable' });
+    } catch { return res.status(400).json({ error: 'Could not connect to Home Assistant' }); }
+    const { publicKey, privateKey } = webpush.generateVAPIDKeys();
+    saveConfig({
+      haUrl: haUrl.replace(/\/$/, ''), haToken,
+      dashboardName: dashboardName ?? 'Safrani Home',
+      vapidPublicKey: publicKey, vapidPrivateKey: privateKey,
+      pushWebhookSecret: crypto.randomUUID(),
+    });
+  } else {
+    // Already configured — ensure VAPID keys exist
+    const prev = getConfig()!;
+    if (!prev.vapidPublicKey) {
+      const { publicKey, privateKey } = webpush.generateVAPIDKeys();
+      saveConfig({ ...prev, vapidPublicKey: publicKey, vapidPrivateKey: privateKey, pushWebhookSecret: prev.pushWebhookSecret ?? crypto.randomUUID() });
+    }
+  }
+
+  // Create the first admin user
+  const uid = username.trim().toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString(36);
+  layout.users.push({
+    id: uid,
+    name: name.trim(),
+    username: username.trim().toLowerCase(),
+    passwordHash: await hashPassword(password),
+    role: 'admin',
+    allowedRooms: null,
+    allowedTabs: null,
+  });
+  saveLayout(layout);
   res.json({ ok: true });
 });
 
@@ -87,29 +140,29 @@ app.post('/api/login', async (req, res) => {
   const ip = req.ip ?? 'unknown';
   if (!rateLimit(ip)) return res.status(429).json({ error: 'Too many attempts' });
   const { username, password, duration } = req.body as { username?: string; password?: string; duration?: string };
-  if (!password) return res.status(400).json({ error: 'Password required' });
+  if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   const payload = await validateUserLogin(username, password);
   if (!payload) return res.status(401).json({ error: 'Invalid credentials' });
   res.json({ token: signToken(payload, duration), role: payload.role });
 });
 
+// Admin: reconfigure HA connection
 app.post('/api/reconfigure', async (req, res) => {
-  if (!isConfigured()) return res.status(400).json({ error: 'Not configured' });
-  const { haUrl, haToken, newPassword } = req.body as { haUrl?: string; haToken?: string; newPassword?: string };
-  if (!haUrl || !haToken || !newPassword) return res.status(400).json({ error: 'haUrl, haToken and newPassword are required' });
-  if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const payload = authToken(req);
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const { haUrl, haToken, dashboardName } = req.body as { haUrl?: string; haToken?: string; dashboardName?: string };
+  if (!haUrl || !haToken) return res.status(400).json({ error: 'haUrl and haToken required' });
   try {
     const { default: fetch } = await import('node-fetch');
     const test = await fetch(`${haUrl.replace(/\/$/, '')}/api/`, { headers: { Authorization: `Bearer ${haToken}` } });
     if (!test.ok) return res.status(400).json({ error: 'HA token invalid' });
   } catch { return res.status(400).json({ error: 'Could not connect to Home Assistant' }); }
-  const passwordHash = await hashPassword(newPassword);
   const prev = getConfig()!;
-  saveConfig({ ...prev, haUrl: haUrl.replace(/\/$/, ''), haToken, passwordHash });
+  saveConfig({ ...prev, haUrl: haUrl.replace(/\/$/, ''), haToken, dashboardName: dashboardName ?? prev.dashboardName });
   res.json({ ok: true });
 });
 
-// ── Layout ──────────────────────────────────────────────────────────────────
+// ── Layout ────────────────────────────────────────────────────────────────────
 
 app.get('/api/layout', (req, res) => {
   const payload = authToken(req);
@@ -143,27 +196,38 @@ app.put('/api/layout', (req, res) => {
 
 app.get('/api/layout/default', (_req, res) => res.json(DEFAULT_LAYOUT));
 
-// ── Users ───────────────────────────────────────────────────────────────────
+// ── Users ─────────────────────────────────────────────────────────────────────
 
 app.get('/api/users', (req, res) => {
   const payload = authToken(req);
   if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
-  res.json(getLayout().users.map(u => ({ id: u.id, name: u.name, role: u.role, allowedRooms: u.allowedRooms, allowedTabs: u.allowedTabs })));
+  res.json(getLayout().users.map(u => ({ id: u.id, name: u.name, username: u.username, role: u.role, allowedRooms: u.allowedRooms, allowedTabs: u.allowedTabs })));
 });
 
 app.post('/api/users', async (req, res) => {
   const payload = authToken(req);
   if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
-  const { name, password, role, allowedRooms, allowedTabs } = req.body as {
-    name?: string; password?: string; role?: string; allowedRooms?: string[] | null; allowedTabs?: string[] | null;
+  const { name, username, password, role, allowedRooms, allowedTabs } = req.body as {
+    name?: string; username?: string; password?: string; role?: string;
+    allowedRooms?: string[] | null; allowedTabs?: string[] | null;
   };
-  if (!name || !password) return res.status(400).json({ error: 'Name and password required' });
+  if (!name || !username || !password) return res.status(400).json({ error: 'Name, username and password required' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   const layout = getLayout();
-  if (layout.users.find(u => u.name.toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: 'User already exists' });
-  const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString(36);
-  layout.users.push({ id, name, passwordHash: await hashPassword(password), role: role === 'admin' ? 'admin' : 'user', allowedRooms: allowedRooms ?? null, allowedTabs: allowedTabs ?? null });
-  saveLayout(layout); res.json({ ok: true, id });
+  const uname = username.trim().toLowerCase();
+  if (layout.users.find(u => (u.username ?? u.name).toLowerCase() === uname)) {
+    return res.status(409).json({ error: 'Username already taken' });
+  }
+  const id = uname.replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString(36);
+  layout.users.push({
+    id, name: name.trim(), username: uname,
+    passwordHash: await hashPassword(password),
+    role: role === 'admin' ? 'admin' : 'user',
+    allowedRooms: allowedRooms ?? null,
+    allowedTabs: allowedTabs ?? null,
+  });
+  saveLayout(layout);
+  res.json({ ok: true, id });
 });
 
 app.patch('/api/users/:id', async (req, res) => {
@@ -172,24 +236,104 @@ app.patch('/api/users/:id', async (req, res) => {
   const layout = getLayout();
   const user = layout.users.find(u => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const { name, password, role, allowedRooms, allowedTabs } = req.body as { name?: string; password?: string; role?: string; allowedRooms?: string[] | null; allowedTabs?: string[] | null };
-  if (name) user.name = name;
-  if (password) { if (password.length < 8) return res.status(400).json({ error: 'Password too short' }); user.passwordHash = await hashPassword(password); }
+  const { name, username, password, role, allowedRooms, allowedTabs } = req.body as {
+    name?: string; username?: string; password?: string; role?: string;
+    allowedRooms?: string[] | null; allowedTabs?: string[] | null;
+  };
+  if (name) user.name = name.trim();
+  if (username) user.username = username.trim().toLowerCase();
+  if (password) {
+    if (password.length < 8) return res.status(400).json({ error: 'Password too short' });
+    user.passwordHash = await hashPassword(password);
+  }
   if (role === 'admin' || role === 'user') user.role = role;
   if (allowedRooms !== undefined) user.allowedRooms = allowedRooms;
   if (allowedTabs !== undefined) user.allowedTabs = allowedTabs;
-  saveLayout(layout); res.json({ ok: true });
+  saveLayout(layout);
+  res.json({ ok: true });
 });
 
 app.delete('/api/users/:id', (req, res) => {
   const payload = authToken(req);
   if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
   const layout = getLayout();
+  const admins = layout.users.filter(u => u.role === 'admin');
+  const target = layout.users.find(u => u.id === req.params.id);
+  if (target?.role === 'admin' && admins.length <= 1) {
+    return res.status(400).json({ error: 'Cannot delete the last admin account' });
+  }
   layout.users = layout.users.filter(u => u.id !== req.params.id);
-  saveLayout(layout); res.json({ ok: true });
+  saveLayout(layout);
+  res.json({ ok: true });
 });
 
-// ── HA Scanner ───────────────────────────────────────────────────────────────
+// ── Push notifications ────────────────────────────────────────────────────────
+
+app.get('/api/push/vapid-key', (req, res) => {
+  const payload = authToken(req);
+  if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+  const config = getConfig();
+  if (!config?.vapidPublicKey) return res.status(503).json({ error: 'Push not configured' });
+  res.json({ publicKey: config.vapidPublicKey });
+});
+
+app.get('/api/push/config', (req, res) => {
+  const payload = authToken(req);
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const config = getConfig();
+  if (!config?.pushWebhookSecret) return res.status(503).json({ error: 'Push not configured' });
+  const proto = (req.headers['x-forwarded-proto'] as string) ?? (req.secure ? 'https' : 'http');
+  const host = req.headers.host ?? 'your-dashboard.domain';
+  res.json({
+    webhookUrl: `${proto}://${host}/api/push/doorbell?secret=${config.pushWebhookSecret}`,
+    vapidPublicKey: config.vapidPublicKey,
+  });
+});
+
+app.post('/api/push/subscribe', (req, res) => {
+  const payload = authToken(req);
+  if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+  const sub = req.body as PushSub;
+  if (!sub?.endpoint) return res.status(400).json({ error: 'Invalid subscription' });
+  const subs = loadSubs();
+  const idx = subs.findIndex(s => s.endpoint === sub.endpoint);
+  if (idx >= 0) subs[idx] = sub; else subs.push(sub);
+  saveSubs(subs);
+  res.json({ ok: true });
+});
+
+// Webhook called by HA when doorbell rings
+app.post('/api/push/doorbell', async (req, res) => {
+  const config = getConfig();
+  if (!config?.pushWebhookSecret || !config.vapidPublicKey || !config.vapidPrivateKey) {
+    return res.status(503).json({ error: 'Push not configured' });
+  }
+  const secret = (req.query.secret as string) || (req.body as Record<string, string>)?.secret;
+  if (secret !== config.pushWebhookSecret) return res.status(403).json({ error: 'Invalid secret' });
+
+  const { title = '🔔 Doorbell', body = 'Someone is at the door', url = '/' } = (req.body as Record<string, string>) ?? {};
+
+  webpush.setVapidDetails(
+    'mailto:admin@safrani.co',
+    config.vapidPublicKey,
+    config.vapidPrivateKey,
+  );
+
+  const subs = loadSubs();
+  const pushPayload = JSON.stringify({ title, body, url });
+  const results = await Promise.allSettled(subs.map(s => webpush.sendNotification(s as Parameters<typeof webpush.sendNotification>[0], pushPayload)));
+
+  // Remove gone subscriptions (410 = subscription expired)
+  const valid = subs.filter((_, i) => {
+    const r = results[i];
+    return r.status !== 'rejected' || (r.reason as { statusCode?: number })?.statusCode !== 410;
+  });
+  if (valid.length !== subs.length) saveSubs(valid);
+
+  res.json({ ok: true, sent: results.filter(r => r.status === 'fulfilled').length, total: subs.length });
+});
+
+// ── HA Scanner ────────────────────────────────────────────────────────────────
 
 app.get('/api/ha/entities', async (req, res) => {
   const payload = authToken(req);
@@ -204,7 +348,7 @@ app.get('/api/ha/entities', async (req, res) => {
   } catch { res.status(502).json({ error: 'HA unreachable' }); }
 });
 
-// ── Camera proxy ─────────────────────────────────────────────────────────────
+// ── Camera proxy ──────────────────────────────────────────────────────────────
 
 app.get('/api/camera/:entityId', async (req, res) => {
   const payload = authToken(req);
@@ -229,6 +373,14 @@ app.get('/api/camera/:entityId/stream', async (req, res) => {
   if (!/^camera\.[a-z0-9_]+$/.test(entityId)) return res.status(400).json({ error: 'Invalid entity' });
   const config = getConfig();
   if (!config) return res.status(503).json({ error: 'Not configured' });
+
+  // Check if camera has a direct stream URL configured (e.g., Scrypted)
+  const layout = getLayout();
+  const cam = layout.security.cameras.find(c => c.entity === entityId);
+  if (cam?.streamUrl && cam.streamType === 'hls') {
+    return res.json({ url: cam.streamUrl, type: 'hls-direct' });
+  }
+
   const token = (req.headers.authorization?.slice(7) ?? req.query.token) as string;
   try {
     const { default: fetch } = await import('node-fetch');
@@ -244,7 +396,7 @@ app.get('/api/camera/:entityId/stream', async (req, res) => {
     const sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     hlsSessions.set(sid, { haBase, expires: Date.now() + 7_200_000 });
     setTimeout(() => hlsSessions.delete(sid), 7_200_000);
-    res.json({ url: `/api/hls/${sid}/index.m3u8?token=${encodeURIComponent(token)}` });
+    res.json({ url: `/api/hls/${sid}/index.m3u8?token=${encodeURIComponent(token)}`, type: 'hls-proxied' });
   } catch { res.status(502).json({ error: 'Could not create stream' }); }
 });
 
@@ -277,12 +429,23 @@ app.get('/api/hls/:sid/:file', async (req, res) => {
   } catch { res.status(502).send('Segment error'); }
 });
 
-// ── Static ───────────────────────────────────────────────────────────────────
+// ── Setup redirect + static ───────────────────────────────────────────────────
 
+// Redirect to /setup if no users registered yet (first-run or migration)
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (req.path.startsWith('/api/') || req.path === '/setup' || req.path === '/login') return next();
+  const layout = getLayout();
+  if (layout.users.length === 0) return res.redirect('/setup');
+  next();
+});
+
+app.get('/setup', (_req, res) => res.sendFile(join(PUBLIC_DIR, 'setup.html')));
 app.use(express.static(PUBLIC_DIR));
 app.get('/login', (_req, res) => res.sendFile(join(PUBLIC_DIR, 'login.html')));
 app.get('/admin', (_req, res) => res.sendFile(join(PUBLIC_DIR, 'admin.html')));
 app.get('*', (_req, res) => res.sendFile(join(PUBLIC_DIR, 'index.html')));
+
+// ── Start ─────────────────────────────────────────────────────────────────────
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/api/ws' });
@@ -290,5 +453,6 @@ setupWsProxy(wss);
 
 server.listen(PORT, () => {
   console.log(`[ha-dashboard] Running on http://0.0.0.0:${PORT}`);
-  if (!isConfigured()) console.log('[ha-dashboard] First run — open the app to complete setup');
+  const layout = getLayout();
+  if (layout.users.length === 0) console.log('[ha-dashboard] First run — open the app to complete setup');
 });

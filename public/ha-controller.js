@@ -15,6 +15,51 @@ window.haMediaCmd    = (e,a,x={}) => callHA('media_player', a, e, x);
 
 const _mediaPauseTimers = new Map();
 
+// ── Service worker + push notifications ───────────────────────────────────
+async function _registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    await navigator.serviceWorker.register('/sw.js');
+  } catch (e) { console.warn('[SW] registration failed', e); }
+}
+
+async function _subscribePush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) return; // already subscribed
+
+    const keyRes = await fetch('/api/push/vapid-key', { headers: { Authorization: `Bearer ${_token}` } });
+    const { publicKey } = await keyRes.json();
+    if (!publicKey) return;
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: _urlBase64ToUint8Array(publicKey),
+    });
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${_token}` },
+      body: JSON.stringify(sub),
+    });
+  } catch (e) { console.warn('[Push] subscribe failed', e); }
+}
+
+async function _enableNotifications() {
+  if (!('Notification' in window)) { alert('Push notifications are not supported in this browser.'); return; }
+  if (Notification.permission === 'denied') { alert('Notifications are blocked. Enable them in browser settings.'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') { await _subscribePush(); }
+}
+
+function _urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
 // ── Boot: load layout then connect ─────────────────────────────────────────
 const _token = sessionStorage.getItem('ha_dash_token');
 if (!_token) { window.location.href = '/login'; }
@@ -53,7 +98,11 @@ function _addUserChip() {
   wrap.innerHTML = `<span style="width:18px;height:18px;border-radius:50%;background:rgba(91,141,238,.3);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${initial}</span>${name}`;
   const menu = document.createElement('div');
   menu.style.cssText = 'position:absolute;top:calc(100% + 6px);right:0;background:#1e293b;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:6px;min-width:120px;z-index:200;display:none;box-shadow:0 8px 24px rgba(0,0,0,.5)';
+  const notifItem = ('Notification' in window && 'PushManager' in window)
+    ? `<div class="user-menu-item" id="notif-menu-item" onclick="window._enableNotifications()" style="padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:#f1f5f9">🔔 Enable Notifications</div>`
+    : '';
   menu.innerHTML = `<div style="padding:6px 10px;font-size:11px;color:#64748b;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px">${name}</div>
+    ${notifItem}
     <div class="user-menu-item" onclick="sessionStorage.removeItem('ha_dash_token');location.href='/login'" style="padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:#f1f5f9">🚪 Sign Out</div>`;
   menu.querySelectorAll('.user-menu-item').forEach(it => {
     it.addEventListener('mouseenter', () => it.style.background = 'rgba(255,255,255,.08)');
@@ -903,4 +952,6 @@ const _FALLBACK_LIGHTS = [
 ];
 
 // ── Start ────────────────────────────────────────────────────────────────────
+window._enableNotifications = _enableNotifications;
+_registerSW();
 boot();

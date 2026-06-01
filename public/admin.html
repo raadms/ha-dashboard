@@ -284,6 +284,12 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
   </div>
 
   <div class="nav-grp">
+    <span class="nav-lbl">System</span>
+    <div class="nav-item" data-sec="push" onclick="goSec('push')"><span class="ni">🔔</span> Push Notifications</div>
+    <div class="nav-item" data-sec="reconfig" onclick="goSec('reconfig')"><span class="ni">🔗</span> HA Connection</div>
+  </div>
+
+  <div class="nav-grp">
     <span class="nav-lbl">Tools</span>
     <div class="nav-item" data-sec="scanner" onclick="goSec('scanner')"><span class="ni">🔍</span> Entity Scanner</div>
   </div>
@@ -451,6 +457,51 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
     <button class="btn btn-p" onclick="openUserModal(null)">+ Add User</button>
   </div>
 
+  <!-- PUSH NOTIFICATIONS -->
+  <div class="sec" id="sec-push">
+    <div class="sec-hd"><h2>Push Notifications</h2><p>Doorbell alerts sent to all signed-in devices via Web Push.</p></div>
+    <div class="card">
+      <div class="card-title">HA Webhook URL</div>
+      <p style="font-size:13px;color:var(--muted2);margin-bottom:14px;line-height:1.6">
+        Create an automation in Home Assistant that calls this URL when the doorbell rings (REST command, <code style="background:rgba(255,255,255,.08);padding:2px 6px;border-radius:5px;font-size:11px">notify.rest</code>, or <em>make a call</em> action).
+      </p>
+      <div class="field">
+        <label>Webhook URL <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— keep this secret</span></label>
+        <div style="display:flex;gap:8px">
+          <input id="push-webhook-url" readonly style="flex:1;font-family:'SF Mono',Monaco,monospace;font-size:11px;color:#93c5fd"/>
+          <button class="btn btn-s btn-sm" onclick="copyWebhookUrl()">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">HA Automation Example</div>
+      <p style="font-size:13px;color:var(--muted2);margin-bottom:12px;line-height:1.6">Add this to an automation triggered by your doorbell binary sensor:</p>
+      <textarea id="push-ha-example" readonly rows="8" style="color:#93c5fd;font-size:11px"></textarea>
+    </div>
+  </div>
+
+  <!-- HA RECONFIGURE -->
+  <div class="sec" id="sec-reconfig">
+    <div class="sec-hd"><h2>HA Connection</h2><p>Update your Home Assistant URL, token or dashboard name.</p></div>
+    <div class="card">
+      <div class="field"><label>HA URL</label><input id="rc-url" placeholder="https://ha.yourdomain.com" type="url"/></div>
+      <div class="field"><label>Long-Lived Access Token</label><textarea id="rc-token" rows="3" placeholder="Paste from HA → Profile → Security → Long-Lived Access Tokens"></textarea></div>
+      <div class="field"><label>Dashboard Name</label><input id="rc-name" placeholder="Safrani Home"/></div>
+      <div class="err" id="rc-err"></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-s" onclick="testRcHA()">
+          <span class="spin" id="rc-test-spin" style="display:none"></span>
+          <span id="rc-test-txt">Test Connection</span>
+        </button>
+        <button class="btn btn-p" id="rc-save-btn" onclick="saveReconfig()" disabled>
+          <span class="spin" id="rc-save-spin" style="display:none"></span>
+          <span id="rc-save-txt">Save</span>
+        </button>
+      </div>
+      <div id="rc-ok" style="display:none;margin-top:12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:10px 13px;font-size:12px;color:#6ee7b7">✅ Connection verified — click Save to apply</div>
+    </div>
+  </div>
+
   <!-- SCANNER -->
   <div class="sec" id="sec-scanner">
     <div class="sec-hd"><h2>Entity Scanner</h2><p>Browse all Home Assistant entities and assign them to rooms or tabs.</p></div>
@@ -565,7 +616,18 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
   <div class="mhd"><h3 id="m-cam-title">Edit Camera</h3><button class="mclose" onclick="closeM('m-camera')">✕</button></div>
   <div class="mbody">
     <div class="field"><label>Label</label><input id="cam-label" placeholder="Front Door"/></div>
-    <div class="field"><label>Entity ID</label><input id="cam-ent" placeholder="camera.front_door"/></div>
+    <div class="field"><label>HA Entity ID</label><input id="cam-ent" placeholder="camera.front_door"/></div>
+    <div class="field">
+      <label>Live Stream URL <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— Scrypted or any HLS URL (optional)</span></label>
+      <input id="cam-stream-url" placeholder="https://scrypted.domain/stream.m3u8"/>
+    </div>
+    <div class="field">
+      <label>Stream Type</label>
+      <select id="cam-stream-type">
+        <option value="ha">Via HA proxy (default)</option>
+        <option value="hls">Direct HLS URL (Scrypted)</option>
+      </select>
+    </div>
   </div>
   <div class="mfoot">
     <button class="btn btn-d btn-sm" id="cam-del-btn" onclick="deleteCamera()">Delete</button>
@@ -627,8 +689,9 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
 <div class="modal">
   <div class="mhd"><h3 id="m-user-title">Add User</h3><button class="mclose" onclick="closeM('m-user')">✕</button></div>
   <div class="mbody">
-    <div class="row2">
-      <div><label>Username</label><input id="u-name" placeholder="Rola"/></div>
+    <div class="row3">
+      <div><label>Display Name</label><input id="u-name" placeholder="Rola"/></div>
+      <div><label>Username</label><input id="u-username" placeholder="rola" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')"/></div>
       <div><label>Role</label><select id="u-role"><option value="user">User</option><option value="admin">Admin</option></select></div>
     </div>
     <div class="field">
@@ -774,6 +837,8 @@ function goSec(name) {
   document.getElementById('sec-' + name)?.classList.add('active');
   document.querySelector(`[data-sec="${name}"]`)?.classList.add('active');
   if (name === 'scanner' && !_scanEnts) loadScanner();
+  if (name === 'push') loadPushSection();
+  if (name === 'reconfig') loadReconfigSection();
 }
 
 // ── RENDER ALL ────────────────────────────────────────────────────────────────
@@ -1087,20 +1152,26 @@ function renderCameras() {
 
 function openCameraModal(i) {
   _editCamIdx = i;
-  const c = i >= 0 ? L.security.cameras[i] : { label: '', entity: '' };
+  const c = i >= 0 ? L.security.cameras[i] : { label: '', entity: '', streamUrl: '', streamType: 'ha' };
   document.getElementById('m-cam-title').textContent = i >= 0 ? 'Edit Camera' : 'Add Camera';
   document.getElementById('cam-label').value = c.label;
   document.getElementById('cam-ent').value = c.entity;
+  document.getElementById('cam-stream-url').value = c.streamUrl || '';
+  document.getElementById('cam-stream-type').value = c.streamType || 'ha';
   document.getElementById('cam-del-btn').style.display = i >= 0 ? '' : 'none';
   openM('m-camera');
 }
 
 function saveCamera() {
   if (!L.security.cameras) L.security.cameras = [];
+  const streamUrl = document.getElementById('cam-stream-url').value.trim();
+  const streamType = document.getElementById('cam-stream-type').value;
   const c = {
     id: _editCamIdx >= 0 ? L.security.cameras[_editCamIdx].id : 'cam_' + Date.now().toString(36),
     label: document.getElementById('cam-label').value.trim(),
     entity: document.getElementById('cam-ent').value.trim(),
+    ...(streamUrl && { streamUrl }),
+    streamType,
   };
   if (!c.label || !c.entity) return;
   if (_editCamIdx >= 0) L.security.cameras[_editCamIdx] = c;
@@ -1359,7 +1430,9 @@ function openUserModal(userId) {
   const user = isNew ? null : (L.users || []).find(u => u.id === userId);
   document.getElementById('m-user-title').textContent = isNew ? 'Add User' : 'Edit User';
   document.getElementById('u-name').value = user?.name || '';
-  document.getElementById('u-name').disabled = !isNew;
+  document.getElementById('u-username').value = user?.username || '';
+  document.getElementById('u-username').disabled = !isNew;
+  document.getElementById('u-name').disabled = false;
   document.getElementById('u-role').value = user?.role || 'user';
   document.getElementById('u-pwd').value = '';
   document.getElementById('u-pwd-hint').style.display = isNew ? 'none' : '';
@@ -1408,13 +1481,15 @@ async function saveUser() {
 
   try {
     let res;
+    const username = document.getElementById('u-username').value.trim();
     if (!_editUserId) {
-      if (!name) { errEl.textContent = 'Name required'; errEl.className = 'err show'; return; }
+      if (!name)     { errEl.textContent = 'Display name required'; errEl.className = 'err show'; return; }
+      if (!username) { errEl.textContent = 'Username required'; errEl.className = 'err show'; return; }
       if (!pwd || pwd.length < 8) { errEl.textContent = 'Password must be ≥ 8 characters'; errEl.className = 'err show'; return; }
-      res = await api('POST', '/api/users', { ...body, name, password: pwd });
+      res = await api('POST', '/api/users', { ...body, name, username, password: pwd });
     } else {
       if (pwd && pwd.length < 8) { errEl.textContent = 'Password must be ≥ 8 characters'; errEl.className = 'err show'; return; }
-      res = await api('PATCH', '/api/users/' + _editUserId, { ...body, ...(pwd ? { password: pwd } : {}) });
+      res = await api('PATCH', '/api/users/' + _editUserId, { ...body, name, ...(pwd ? { password: pwd } : {}) });
     }
     if (res.error) { errEl.textContent = res.error; errEl.className = 'err show'; return; }
     toast(_editUserId ? 'User updated' : 'User created');
@@ -1687,6 +1762,80 @@ function setupAllEntityInputs() {
     const el = document.getElementById(id);
     if (el) bindEntityInput(el);
   });
+}
+
+// ── PUSH NOTIFICATIONS ────────────────────────────────────────────────────────
+async function loadPushSection() {
+  try {
+    const d = await api('GET', '/api/push/config');
+    if (d.error) { document.getElementById('push-webhook-url').value = 'Push not configured — complete setup first'; return; }
+    document.getElementById('push-webhook-url').value = d.webhookUrl;
+    document.getElementById('push-ha-example').value =
+`automation:
+  - alias: "Doorbell Push Notification"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.doorbell_button
+        to: "on"
+    action:
+      - service: rest_command.doorbell_push
+        data: {}
+
+rest_command:
+  doorbell_push:
+    url: "${d.webhookUrl}"
+    method: POST
+    content_type: "application/json"
+    payload: '{"title":"🔔 Doorbell","body":"Someone is at the door"}'`;
+  } catch { document.getElementById('push-webhook-url').value = 'Failed to load'; }
+}
+
+function copyWebhookUrl() {
+  const val = document.getElementById('push-webhook-url').value;
+  navigator.clipboard.writeText(val).then(() => toast('Copied!')).catch(() => toast('Copy failed', false));
+}
+
+// ── HA RECONFIGURE ────────────────────────────────────────────────────────────
+async function loadReconfigSection() {
+  try {
+    const d = await api('GET', '/api/config');
+    document.getElementById('rc-name').value = d.name || '';
+  } catch {}
+}
+
+async function testRcHA() {
+  const url = document.getElementById('rc-url').value.trim();
+  const token = document.getElementById('rc-token').value.trim();
+  const errEl = document.getElementById('rc-err');
+  const okEl = document.getElementById('rc-ok');
+  errEl.className = 'err'; okEl.style.display = 'none';
+  document.getElementById('rc-save-btn').disabled = true;
+  if (!url || !token) { errEl.textContent = 'Fill in URL and token'; errEl.className = 'err show'; return; }
+  document.getElementById('rc-test-spin').style.display = 'inline-block';
+  document.getElementById('rc-test-txt').textContent = 'Testing…';
+  try {
+    const d = await api('POST', '/api/test-ha', { haUrl: url, haToken: token });
+    if (d.ok) { okEl.style.display = ''; document.getElementById('rc-save-btn').disabled = false; }
+    else { errEl.textContent = d.error || 'Connection failed'; errEl.className = 'err show'; }
+  } catch { errEl.textContent = 'Request failed'; errEl.className = 'err show'; }
+  finally { document.getElementById('rc-test-spin').style.display = 'none'; document.getElementById('rc-test-txt').textContent = 'Test Connection'; }
+}
+
+async function saveReconfig() {
+  const url = document.getElementById('rc-url').value.trim();
+  const token = document.getElementById('rc-token').value.trim();
+  const name = document.getElementById('rc-name').value.trim();
+  const errEl = document.getElementById('rc-err');
+  errEl.className = 'err';
+  document.getElementById('rc-save-spin').style.display = 'inline-block';
+  document.getElementById('rc-save-txt').textContent = 'Saving…';
+  document.getElementById('rc-save-btn').disabled = true;
+  try {
+    const d = await api('POST', '/api/reconfigure', { haUrl: url, haToken: token, dashboardName: name || undefined });
+    if (d.ok) { toast('HA connection updated ✓'); document.getElementById('rc-ok').style.display = 'none'; document.getElementById('rc-url').value = ''; document.getElementById('rc-token').value = ''; }
+    else { errEl.textContent = d.error || 'Save failed'; errEl.className = 'err show'; document.getElementById('rc-save-btn').disabled = false; }
+  } catch { errEl.textContent = 'Request failed'; errEl.className = 'err show'; document.getElementById('rc-save-btn').disabled = false; }
+  finally { document.getElementById('rc-save-spin').style.display = 'none'; document.getElementById('rc-save-txt').textContent = 'Save'; }
 }
 
 // ── Reset to Defaults ─────────────────────────────────────────────────────────
