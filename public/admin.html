@@ -380,6 +380,14 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
       </div>
     </div>
     <div class="card">
+      <div class="card-title">Doorbell Alert</div>
+      <p style="font-size:13px;color:var(--muted2);margin-bottom:14px;line-height:1.6">When this entity changes state (event or binary_sensor), a full-screen doorbell popup appears on the dashboard.</p>
+      <div class="row2">
+        <div><label>Doorbell Trigger Entity</label><input id="i-doorbell" placeholder="event.g4_doorbell_pro_poe_doorbell" oninput="dirty()"/></div>
+        <div><label>Doorbell Camera Entity</label><input id="i-doorbellcam" placeholder="camera.g4_doorbell_pro_poe_high_resolution_channel" oninput="dirty()"/></div>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-title">Sensors</div>
       <div class="list-rows" id="sensors-list"></div>
       <button class="btn btn-s btn-sm" onclick="openSensorModal(-1)">+ Add Sensor</button>
@@ -1080,6 +1088,8 @@ function renderSecurity() {
   document.getElementById('i-nas').value = L.security.nasEntity || '';
   document.getElementById('i-lock').value = L.security.lock?.entity || '';
   document.getElementById('i-lockbat').value = L.security.lock?.batteryEntity || '';
+  document.getElementById('i-doorbell').value = L.security.doorbellEntity || '';
+  document.getElementById('i-doorbellcam').value = L.security.doorbellCamera || '';
   renderSensors();
   renderCameras();
 }
@@ -1090,6 +1100,8 @@ function syncSecFields() {
   const le = document.getElementById('i-lock').value.trim();
   const lb = document.getElementById('i-lockbat').value.trim();
   L.security.lock = le ? { entity: le, ...(lb ? { batteryEntity: lb } : {}) } : undefined;
+  L.security.doorbellEntity = document.getElementById('i-doorbell').value.trim() || undefined;
+  L.security.doorbellCamera = document.getElementById('i-doorbellcam').value.trim() || undefined;
 }
 
 function renderSensors() {

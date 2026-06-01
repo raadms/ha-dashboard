@@ -86,6 +86,8 @@ export interface LayoutConfig {
     cameras: CameraConfig[];
     lock?: { entity: string; batteryEntity?: string };
     nasEntity?: string;
+    doorbellEntity?: string;   // event or binary_sensor entity to watch for rings
+    doorbellCamera?: string;   // camera entity to show on ring
   };
   status: {
     lights: string[];

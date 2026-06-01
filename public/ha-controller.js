@@ -1042,6 +1042,132 @@ const _FALLBACK_LIGHTS = [
   'switch.laundry_light_left','switch.laundry_light_right',
 ];
 
+// ── Doorbell alert ───────────────────────────────────────────────────────────
+(function() {
+  // Inject keyframe CSS once
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes db-pop  { from{opacity:0;transform:scale(.88)} to{opacity:1;transform:scale(1)} }
+    @keyframes db-ring { 0%,100%{transform:rotate(0) scale(1)} 20%{transform:rotate(-18deg) scale(1.1)} 60%{transform:rotate(16deg) scale(1.1)} }
+    @keyframes db-pulse{ 0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,.5)} 50%{box-shadow:0 0 0 12px rgba(251,191,36,0)} }
+  `;
+  document.head.appendChild(style);
+
+  let _lastDoorbellState = null;
+  let _alertShowing = false;
+
+  document.addEventListener('ha-states-updated', () => {
+    const L = window.__layout?.security ?? {};
+    // Entity to watch — configured in admin or fallback to discovered UniFi entity
+    const triggerId = L.doorbellEntity || 'event.g4_doorbell_pro_poe_doorbell';
+    const cameraId  = L.doorbellCamera || 'camera.g4_doorbell_pro_poe_high_resolution_channel';
+    const camLabel  = (window.__layout?.security?.cameras ?? []).find(c => c.entity === cameraId)?.label || 'Doorbell Camera';
+
+    const ent = window.__haEntities?.[triggerId];
+    if (!ent) return;
+
+    const cur = ent.state;
+    if (_lastDoorbellState === null) { _lastDoorbellState = cur; return; } // first load — store, don't fire
+    if (cur === _lastDoorbellState) return;
+    _lastDoorbellState = cur;
+    if (cur === 'unknown' || cur === 'unavailable') return;
+
+    _showDoorbellAlert(cameraId, camLabel);
+  });
+
+  function _showDoorbellAlert(cameraId, cameraLabel) {
+    if (_alertShowing) return;
+    _alertShowing = true;
+
+    document.getElementById('doorbell-alert')?.remove();
+    clearInterval(window._doorbellSnapInt);
+    clearInterval(window._doorbellCdInt);
+
+    const tk = sessionStorage.getItem('ha_dash_token');
+    const el = document.createElement('div');
+    el.id = 'doorbell-alert';
+    el.style.cssText = 'position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;align-items:center;justify-content:center;padding:20px;';
+    el.innerHTML = `
+      <div style="background:#0d1526;border:1px solid rgba(251,191,36,.35);border-radius:24px;padding:28px 26px;
+        max-width:480px;width:100%;box-shadow:0 0 0 1px rgba(251,191,36,.1),0 32px 64px rgba(0,0,0,.7);
+        animation:db-pop .35s cubic-bezier(.34,1.56,.64,1)">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+          <div style="width:54px;height:54px;border-radius:16px;background:rgba(251,191,36,.15);
+            border:1px solid rgba(251,191,36,.4);display:flex;align-items:center;justify-content:center;
+            font-size:28px;flex-shrink:0;animation:db-ring .5s ease-in-out 4,db-pulse 1.5s ease-in-out infinite">🔔</div>
+          <div style="flex:1">
+            <div style="font-size:19px;font-weight:800;color:#fff;line-height:1.2">Someone at the door!</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:4px">${cameraLabel}</div>
+          </div>
+          <div id="db-cd" style="font-size:13px;color:#475569;font-variant-numeric:tabular-nums;flex-shrink:0">30s</div>
+        </div>
+        <div style="position:relative;border-radius:14px;overflow:hidden;background:#000;min-height:100px;margin-bottom:18px">
+          <img id="db-snap" style="width:100%;display:block;border-radius:14px;min-height:100px;object-fit:cover"/>
+          <div id="db-snap-ph" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#475569;font-size:13px">Loading…</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button id="db-open" style="flex:1;padding:13px;border-radius:12px;border:none;cursor:pointer;
+            background:rgba(91,141,238,.9);color:#fff;font-size:14px;font-weight:700;font-family:inherit;
+            transition:filter .15s">📹 Open Live Camera</button>
+          <button id="db-dismiss" style="padding:13px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+            cursor:pointer;background:rgba(255,255,255,.05);color:#94a3b8;font-size:14px;font-weight:600;font-family:inherit">
+            Dismiss</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+
+    // Snapshot refresh
+    if (tk) {
+      const img = document.getElementById('db-snap');
+      const ph  = document.getElementById('db-snap-ph');
+      const load = () => {
+        const url = `/api/camera/${cameraId}?token=${encodeURIComponent(tk)}&_t=${Date.now()}`;
+        const tmp = new Image();
+        tmp.onload = () => { img.src = url; if (ph) ph.style.display = 'none'; };
+        tmp.src = url;
+      };
+      load();
+      window._doorbellSnapInt = setInterval(load, 3000);
+    }
+
+    // Countdown
+    let secs = 30;
+    const cd = document.getElementById('db-cd');
+    window._doorbellCdInt = setInterval(() => {
+      secs--;
+      if (cd) cd.textContent = secs + 's';
+      if (secs <= 0) _dismissDoorbellAlert();
+    }, 1000);
+
+    document.getElementById('db-open').onclick = () => {
+      _dismissDoorbellAlert();
+      window.openCamStream?.(cameraId, cameraLabel);
+    };
+    document.getElementById('db-dismiss').onclick = _dismissDoorbellAlert;
+    el.addEventListener('click', e => { if (e.target === el) _dismissDoorbellAlert(); });
+  }
+
+  function _dismissDoorbellAlert() {
+    clearInterval(window._doorbellSnapInt);
+    clearInterval(window._doorbellCdInt);
+    _alertShowing = false;
+    const el = document.getElementById('doorbell-alert');
+    if (!el) return;
+    el.style.transition = 'opacity .2s';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 200);
+  }
+
+  window._testDoorbellAlert = () => {
+    _lastDoorbellState = 'test_trigger';
+    _alertShowing = false;
+    _showDoorbellAlert(
+      window.__layout?.security?.doorbellCamera || 'camera.g4_doorbell_pro_poe_high_resolution_channel',
+      'Doorbell Camera'
+    );
+  };
+})();
+
 // ── Start ────────────────────────────────────────────────────────────────────
 window._enableNotifications = _enableNotifications;
 _registerSW();
