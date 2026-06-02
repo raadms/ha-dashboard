@@ -80,19 +80,40 @@ async function getScryptedCamerasViaScan(baseUrl: string, token: string): Promis
   return results.map(r => r.status === 'fulfilled' ? r.value : null).filter((v): v is ScryptedDevice => v !== null);
 }
 
-// ── Raw engine.io RPC ─────────────────────────────────────────────────────────
+// ── engine.io RPC (polling → WebSocket upgrade, same as Scrypted SDK) ─────────
 
-function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
+async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
+  const { default: fetch } = await import('node-fetch');
+
+  // Step 1: Polling GET to obtain a session ID
+  const apiBase = `${baseUrl}/endpoint/@scrypted/core/engine.io/api/`;
+  const pollRes = await fetch(
+    `${apiBase}?EIO=4&transport=polling&scryptedToken=${encodeURIComponent(token)}`,
+    { agent: _tlsAgent } as Parameters<typeof fetch>[1],
+  );
+  if (!pollRes.ok) throw new Error(`Scrypted polling failed: ${pollRes.status}`);
+
+  const pollBody = await pollRes.text();
+  // engine.io v4: plain packet "0{...}" | engine.io v3: "LENGTH:0{...}"
+  const stripped = pollBody.replace(/^\d+:/, ''); // strip v3 framing if present
+  const openMatch = stripped.match(/^0(\{[\s\S]*\})/);
+  if (!openMatch) throw new Error(`No OPEN packet in polling response: ${pollBody.slice(0, 120)}`);
+  const openData = JSON.parse(openMatch[1]) as { sid: string };
+  if (!openData.sid) throw new Error('No sid in Scrypted OPEN packet');
+  const sid = openData.sid;
+
+  // Step 2: WebSocket upgrade with the session ID
   return new Promise((resolve, reject) => {
     const wsUrl =
       baseUrl.replace(/^https?/, m => m === 'https' ? 'wss' : 'ws') +
-      `/endpoint/@scrypted/core/engine.io/api/?EIO=4&transport=websocket&scryptedToken=${encodeURIComponent(token)}`;
+      `/endpoint/@scrypted/core/engine.io/api/?EIO=4&transport=websocket&sid=${encodeURIComponent(sid)}&scryptedToken=${encodeURIComponent(token)}`;
 
     const ws = new WebSocket(wsUrl, { rejectUnauthorized: false });
-    const deadline = setTimeout(() => { ws.terminate(); reject(new Error('RPC timeout after 20s')); }, 20_000);
+    const deadline = setTimeout(() => { ws.terminate(); reject(new Error('RPC timeout after 30s')); }, 30_000);
 
     const proxies = new Map<string, object | ((...a: unknown[]) => unknown)>();
     let resolved = false;
+    let upgraded = false;
 
     function done(cameras: ScryptedDevice[]) {
       if (resolved) return; resolved = true;
@@ -100,7 +121,6 @@ function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise<Scryp
       resolve(cameras);
     }
 
-    // io object the Scrypted server calls after handshake
     proxies.set('__io__', {
       setSystemState: (raw: unknown) => {
         try {
@@ -111,23 +131,27 @@ function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise<Scryp
       notify: () => null, ioEvent: () => null, getMediaManager: () => null, setNativeId: () => null,
     });
 
-    // getRemote — server asks for this, then calls it with (systemManager, deviceManager, opts)
     proxies.set('__getRemote__', async () => ({ __type: 'Object', id: '__io__' }));
 
     function send(msg: object) { ws.send('4' + JSON.stringify(msg)); }
 
+    // Send upgrade probe once socket opens
+    ws.once('open', () => { ws.send('2probe'); });
+
     ws.on('message', async (raw: Buffer) => {
       const str = raw.toString();
-      if (str[0] === '2') { ws.send('3'); return; }
-      if (str[0] !== '4') return;
+
+      // engine.io upgrade handshake
+      if (str === '3probe' && !upgraded) { ws.send('5'); upgraded = true; return; }
+      if (str[0] === '2') { ws.send('3'); return; }   // server ping → pong
+      if (str[0] !== '4') return;                      // ignore non-MESSAGE packets
+
       let msg: Record<string, unknown>;
       try { msg = JSON.parse(str.slice(1)) as Record<string, unknown>; } catch { return; }
 
       if (msg.type === 'param') {
-        // Server wants a value by name — give it our io proxy for both 'getRemote' and any other param
         const id = msg.param === 'getRemote' ? '__getRemote__' : '__io__';
         send({ id: msg.id, type: 'result', result: { __type: 'Object', id } });
-
       } else if (msg.type === 'apply') {
         const proxyId = msg.proxyId as string;
         const method = msg.method as string | undefined;
@@ -149,7 +173,12 @@ function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise<Scryp
     });
 
     ws.on('error', e => { clearTimeout(deadline); reject(e); });
-    ws.on('close', () => { if (!resolved) { clearTimeout(deadline); reject(new Error('WS closed before system state')); } });
+    ws.on('close', (code: number, reason: Buffer) => {
+      if (!resolved) {
+        clearTimeout(deadline);
+        reject(new Error(`WS closed before system state (code:${code} reason:${reason?.toString() || 'none'})`));
+      }
+    });
   });
 }
 
