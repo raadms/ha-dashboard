@@ -61,22 +61,27 @@ export async function getScryptedCameras(baseUrl: string, username: string, pass
 // ── Official @scrypted/client SDK ─────────────────────────────────────────────
 
 async function getScryptedCamerasViaSDK(baseUrl: string, username: string, password: string): Promise<ScryptedDevice[]> {
-  // Dynamic import — package may not be available in all environments
-  const { connectScryptedClient } = await import('@scrypted/client');
+  // Dynamic import with any-cast to avoid TypeScript type issues with @scrypted/client
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mod = await import('@scrypted/client') as any;
+  const connectScryptedClient = mod.connectScryptedClient ?? mod.default?.connectScryptedClient;
+  if (typeof connectScryptedClient !== 'function') throw new Error('@scrypted/client: connectScryptedClient not found');
 
-  const client = await connectScryptedClient({ baseUrl, username, password });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client: any = await connectScryptedClient({ baseUrl, username, password });
   try {
-    const state = client.systemManager.getSystemState() as Record<string, Record<string, { value?: unknown }>>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state: Record<string, Record<string, { value?: unknown }>> = client.systemManager.getSystemState() as any;
     const cameras: ScryptedDevice[] = [];
     for (const [id, props] of Object.entries(state)) {
       const ifaces = (props.interfaces?.value ?? []) as string[];
-      if (ifaces.some(i => i === 'VideoCamera' || i === 'Camera' || i === 'VideoRecorder')) {
+      if (ifaces.some(i => ['VideoCamera', 'Camera', 'VideoRecorder', 'RTCSignalingChannel'].includes(i))) {
         cameras.push({ id, name: (props.name?.value as string) ?? id, interfaces: ifaces });
       }
     }
     return cameras;
   } finally {
-    try { (client as unknown as { disconnect?: () => void }).disconnect?.(); } catch { /* ignore */ }
+    try { client.disconnect?.(); } catch { /* ignore */ }
   }
 }
 
