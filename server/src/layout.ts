@@ -71,15 +71,23 @@ export interface UserConfig {
   allowedTabs: string[] | null;
 }
 
+export interface CustomTab {
+  id: string;       // unique slug, e.g. "cameras"
+  name: string;
+  icon: string;     // emoji
+  cameras: string[]; // entity IDs (must exist in security.cameras)
+}
+
 export interface LayoutConfig {
   version: number;
   grid: { cols: number; breakpoints: { minWidth: number; cols: number }[] };
   tabs: {
-    home:     { visible: boolean; name: string };
-    security: { visible: boolean; name: string };
-    climate:  { visible: boolean; name: string };
-    media:    { visible: boolean; name: string };
+    home:     { visible: boolean; name: string; cameras?: string[] };
+    security: { visible: boolean; name: string; cameras?: string[] };
+    climate:  { visible: boolean; name: string; cameras?: string[] };
+    media:    { visible: boolean; name: string; cameras?: string[] };
   };
+  customTabs?: CustomTab[];
   rooms: RoomConfig[];
   security: {
     alarm: string;

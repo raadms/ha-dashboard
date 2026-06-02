@@ -136,6 +136,8 @@ function applyLayout(L) {
   renderRooms(L.rooms);
   renderSensors(L.security?.sensors ?? []);
   renderCameras(L.security?.cameras ?? []);
+  setupTabCameras(L);
+  setupCustomTabs(L.customTabs ?? [], L.security?.cameras ?? []);
   applyTabVisibility(L.tabs);
   updateRadioToggle();
   // Update greeting with actual user name
@@ -264,20 +266,80 @@ function renderSensors(sensors) {
 }
 
 function renderCameras(cameras) {
-  const grid = document.querySelector('.cam-grid');
+  const grid = document.querySelector('#page-security .cam-grid');
   if (!grid || !cameras.length) return;
+  _fillCamGrid(grid, cameras);
+}
+
+function _fillCamGrid(grid, cameras) {
   grid.innerHTML = '';
   for (const cam of cameras) {
+    const safeId = cam.id.replace(/[^a-z0-9_-]/gi, '_');
     const el = document.createElement('div');
     el.className = 'cam';
-    el.dataset.camId = cam.id;
+    el.dataset.camId = safeId;
     el.innerHTML = `
-      <img class="cam-img" id="cam-img-${cam.id}" data-entity="${cam.entity}" alt="${cam.label}">
-      <div class="cam-ph" id="cam-ph-${cam.id}">📷</div>
+      <img class="cam-img" id="cam-img-${safeId}" data-entity="${cam.entity}" alt="${cam.label}">
+      <div class="cam-ph" id="cam-ph-${safeId}">📷</div>
       <div class="cam-lbl">${cam.label}</div>
       <div class="cam-live"><span class="dlive"></span>LIVE</div>`;
     el.addEventListener('click', () => openCamStream(cam.entity, cam.label));
     grid.appendChild(el);
+  }
+}
+
+function setupTabCameras(L) {
+  const allCams = L.security?.cameras ?? [];
+  // fixed tabs: home→page-home, security skipped (renderCameras handles it), climate→page-climate, media→page-tv
+  const fixedMap = { home: 'page-home', climate: 'page-climate', media: 'page-tv' };
+  for (const [key, pageId] of Object.entries(fixedMap)) {
+    const entities = L.tabs?.[key]?.cameras ?? [];
+    const cams = entities.map(e => allCams.find(c => c.entity === e)).filter(Boolean);
+    const page = document.getElementById(pageId);
+    if (!page) continue;
+    // Remove previously injected camera section
+    page.querySelector('.injected-cam-section')?.remove();
+    if (!cams.length) continue;
+    const sec = document.createElement('div');
+    sec.className = 'injected-cam-section';
+    sec.innerHTML = '<div class="sh"><h2>📷 Cameras</h2></div><div class="cam-grid"></div>';
+    page.insertBefore(sec, page.firstChild);
+    _fillCamGrid(sec.querySelector('.cam-grid'), cams);
+  }
+}
+
+function setupCustomTabs(customTabs, allCams) {
+  // Remove previously created custom tabs
+  document.querySelectorAll('.custom-tab-ni, .custom-tab-page').forEach(el => el.remove());
+  const navWrap = document.getElementById('extra-navs');
+  const pagesWrap = document.getElementById('extra-pages');
+  if (!navWrap || !pagesWrap) return;
+  navWrap.innerHTML = '';
+  pagesWrap.innerHTML = '';
+
+  for (const ct of customTabs) {
+    // Nav button
+    const ni = document.createElement('div');
+    ni.className = 'ni custom-tab-ni';
+    ni.id = `ni-${ct.id}`;
+    ni.setAttribute('onclick', `go('${ct.id}')`);
+    ni.innerHTML = `<span style="font-size:20px;line-height:1">${ct.icon || '📌'}</span>${ct.name}`;
+    navWrap.appendChild(ni);
+
+    // Page
+    const page = document.createElement('div');
+    page.className = 'page custom-tab-page';
+    page.id = `page-${ct.id}`;
+    const cams = (ct.cameras ?? []).map(e => allCams.find(c => c.entity === e)).filter(Boolean);
+    if (cams.length) {
+      const sec = document.createElement('div');
+      sec.innerHTML = `<div class="sh"><h2>${ct.icon || '📷'} ${ct.name}</h2></div><div class="cam-grid"></div>`;
+      page.appendChild(sec);
+      _fillCamGrid(sec.querySelector('.cam-grid'), cams);
+    } else {
+      page.innerHTML = `<div style="text-align:center;padding:80px 20px;color:var(--muted);font-size:14px">No cameras on this tab yet.<br><span style="font-size:12px">Add cameras via the Admin panel → Layout & Tabs.</span></div>`;
+    }
+    pagesWrap.appendChild(page);
   }
 }
 

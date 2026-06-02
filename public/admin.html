@@ -359,6 +359,12 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
       <div class="card-title">Tabs</div>
       <div id="tabs-cfg"></div>
     </div>
+    <div class="card">
+      <div class="card-title">Custom Tabs</div>
+      <p style="font-size:13px;color:var(--muted2);margin-bottom:14px">Add extra tabs to the dashboard — great for a dedicated cameras tab or any custom view.</p>
+      <div id="custom-tabs-cfg"></div>
+      <button class="btn btn-s btn-sm" style="margin-top:10px" onclick="addCustomTab()">+ Add Tab</button>
+    </div>
     <div class="card" style="border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.04)">
       <div class="card-title" style="color:#fca5a5">Danger Zone</div>
       <p style="font-size:13px;color:var(--muted2);margin-bottom:14px">Reset all layout configuration to factory defaults. Your user accounts are preserved.</p>
@@ -1114,16 +1120,126 @@ function renderTabs() {
   el.innerHTML = '';
   TABS.forEach(key => {
     const tab = L.tabs[key];
-    const row = document.createElement('div');
-    row.className = 'edit-row';
-    row.innerHTML = `
-      <div class="tog ${tab.visible ? 'on' : ''}" onclick="toggleTab('${key}',this)"></div>
-      <span style="flex:0 0 80px;font-size:12px;font-weight:600;color:var(--muted2)">${esc(TAB_LBL[key])}</span>
-      <input value="${esc(tab.name)}" style="flex:1" placeholder="${esc(TAB_LBL[key])}"
-        onchange="L.tabs['${key}'].name=this.value;dirty()"/>
+    const allCams = L.security?.cameras ?? [];
+    const tabCams = tab.cameras ?? [];
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,.02)';
+    wrap.innerHTML = `
+      <div class="edit-row" style="margin-bottom:${tabCams.length || allCams.length ? '10px' : '0'}">
+        <div class="tog ${tab.visible ? 'on' : ''}" onclick="toggleTab('${key}',this)"></div>
+        <span style="flex:0 0 80px;font-size:12px;font-weight:600;color:var(--muted2)">${esc(TAB_LBL[key])}</span>
+        <input value="${esc(tab.name)}" style="flex:1" placeholder="${esc(TAB_LBL[key])}"
+          onchange="L.tabs['${key}'].name=this.value;dirty()"/>
+      </div>
+      ${allCams.length ? `
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">Camera Tiles</div>
+        <div id="tab-cams-${key}" style="margin-bottom:6px">
+          ${tabCams.map(e => {
+            const cam = allCams.find(c => c.entity === e);
+            return cam ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px;padding:5px 8px;background:rgba(255,255,255,.04);border-radius:7px">
+              <span style="flex:1;color:#f1f5f9">${esc(cam.label)}</span>
+              <span style="color:var(--muted);font-size:10px">${esc(cam.entity)}</span>
+              <button onclick="removeTabCamera('${key}','${esc(e)}')" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:5px;padding:2px 7px;font-size:10px;cursor:pointer">✕</button>
+            </div>` : '';
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="tab-cam-sel-${key}" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#f1f5f9;padding:5px 8px;font-size:12px">
+            <option value="">— add camera tile —</option>
+            ${allCams.filter(c => !tabCams.includes(c.entity)).map(c => `<option value="${esc(c.entity)}">${esc(c.label)}</option>`).join('')}
+          </select>
+          <button class="btn btn-s btn-sm" onclick="addTabCamera('${key}')" style="white-space:nowrap">+ Add</button>
+        </div>
+      ` : `<div style="font-size:11px;color:var(--muted)">No cameras configured yet — add cameras in the Security section first.</div>`}
     `;
-    el.appendChild(row);
+    el.appendChild(wrap);
   });
+  renderCustomTabs();
+}
+
+function addTabCamera(key) {
+  const sel = document.getElementById(`tab-cam-sel-${key}`);
+  if (!sel || !sel.value) return;
+  if (!L.tabs[key].cameras) L.tabs[key].cameras = [];
+  if (!L.tabs[key].cameras.includes(sel.value)) {
+    L.tabs[key].cameras.push(sel.value);
+    dirty();
+    renderTabs();
+  }
+}
+
+function removeTabCamera(key, entity) {
+  if (!L.tabs[key].cameras) return;
+  L.tabs[key].cameras = L.tabs[key].cameras.filter(e => e !== entity);
+  dirty();
+  renderTabs();
+}
+
+function renderCustomTabs() {
+  const el = document.getElementById('custom-tabs-cfg');
+  if (!el) return;
+  const cts = L.customTabs ?? [];
+  const allCams = L.security?.cameras ?? [];
+  if (!cts.length) { el.innerHTML = '<div style="font-size:12px;color:var(--muted)">No custom tabs yet.</div>'; return; }
+  el.innerHTML = cts.map((ct, idx) => `
+    <div style="border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,.02)">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <input value="${esc(ct.icon)}" style="width:44px;text-align:center;font-size:18px;padding:4px 6px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#f1f5f9"
+          placeholder="📌" onchange="L.customTabs[${idx}].icon=this.value;dirty()"/>
+        <input value="${esc(ct.name)}" style="flex:1" placeholder="Tab name"
+          onchange="L.customTabs[${idx}].name=this.value;dirty()"/>
+        <button onclick="removeCustomTab(${idx})" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:7px;padding:5px 10px;font-size:12px;cursor:pointer">Delete</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">Camera Tiles</div>
+      <div id="ct-cams-${idx}" style="margin-bottom:6px">
+        ${(ct.cameras ?? []).map(e => {
+          const cam = allCams.find(c => c.entity === e);
+          return cam ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px;padding:5px 8px;background:rgba(255,255,255,.04);border-radius:7px">
+            <span style="flex:1;color:#f1f5f9">${esc(cam.label)}</span>
+            <button onclick="removeCtCamera(${idx},'${esc(e)}')" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:5px;padding:2px 7px;font-size:10px;cursor:pointer">✕</button>
+          </div>` : '';
+        }).join('')}
+      </div>
+      ${allCams.length ? `
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="ct-cam-sel-${idx}" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#f1f5f9;padding:5px 8px;font-size:12px">
+            <option value="">— add camera —</option>
+            ${allCams.filter(c => !(ct.cameras ?? []).includes(c.entity)).map(c => `<option value="${esc(c.entity)}">${esc(c.label)}</option>`).join('')}
+          </select>
+          <button class="btn btn-s btn-sm" onclick="addCtCamera(${idx})">+ Add</button>
+        </div>` : `<div style="font-size:11px;color:var(--muted)">Add cameras in Security section first.</div>`}
+    </div>`).join('');
+}
+
+function addCustomTab() {
+  if (!L.customTabs) L.customTabs = [];
+  const id = 'tab_' + Date.now().toString(36);
+  L.customTabs.push({ id, name: 'New Tab', icon: '📌', cameras: [] });
+  dirty();
+  renderTabs();
+}
+
+function removeCustomTab(idx) {
+  L.customTabs.splice(idx, 1);
+  dirty();
+  renderTabs();
+}
+
+function addCtCamera(idx) {
+  const sel = document.getElementById(`ct-cam-sel-${idx}`);
+  if (!sel || !sel.value) return;
+  if (!L.customTabs[idx].cameras) L.customTabs[idx].cameras = [];
+  if (!L.customTabs[idx].cameras.includes(sel.value)) {
+    L.customTabs[idx].cameras.push(sel.value);
+    dirty();
+    renderTabs();
+  }
+}
+
+function removeCtCamera(idx, entity) {
+  L.customTabs[idx].cameras = (L.customTabs[idx].cameras ?? []).filter(e => e !== entity);
+  dirty();
+  renderTabs();
 }
 
 function toggleTab(key, el) {
