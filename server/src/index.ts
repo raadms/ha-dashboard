@@ -12,7 +12,7 @@ import { validateUserLogin, signToken, hashPassword, verifyToken } from './auth.
 import { setupWsProxy } from './ws-proxy.js';
 import { isConfigured, loadConfig, saveConfig, getConfig, DATA_DIR } from './config.js';
 import { getLayout, saveLayout, loadLayout, DEFAULT_LAYOUT, type LayoutConfig } from './layout.js';
-import { getScryptedCameras, getScryptedToken, invalidateScryptedCache, debugScryptedConnection } from './scrypted.js';
+import { getScryptedCameras, getScryptedToken, invalidateScryptedCache, debugScryptedConnection, scanScryptedRebroadcast } from './scrypted.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
@@ -601,6 +601,23 @@ app.get('/api/scrypted/debug', async (req, res) => {
   try {
     const info = await debugScryptedConnection(config.scryptedUrl, config.scryptedUsername, config.scryptedPassword);
     res.json(info);
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
+
+// Admin: scan rebroadcast IDs (brute-force 1..200) — shows which device IDs serve HLS
+app.get('/api/scrypted/scan', async (req, res) => {
+  const payload = authToken(req);
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const config = getConfig();
+  if (!config?.scryptedUrl || !config.scryptedUsername || !config.scryptedPassword) {
+    return res.status(503).json({ error: 'Scrypted not configured' });
+  }
+  try {
+    const token = await getScryptedToken(config.scryptedUrl, config.scryptedUsername, config.scryptedPassword);
+    const results = await scanScryptedRebroadcast(config.scryptedUrl, token, 200);
+    res.json(results);
   } catch (e) {
     res.status(502).json({ error: (e as Error).message });
   }

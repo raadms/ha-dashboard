@@ -136,28 +136,61 @@ export async function debugScryptedConnection(baseUrl: string, username: string,
 
 // ── Rebroadcast scan (fallback when RPC fails) ────────────────────────────────
 
-async function getScryptedCamerasViaScan(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
+export interface ScanResult {
+  id: number;
+  status: number;
+  name: string;
+}
+
+export async function scanScryptedRebroadcast(baseUrl: string, token: string, maxId = 200): Promise<ScanResult[]> {
   const { default: fetch } = await import('node-fetch');
 
-  const check = async (id: number): Promise<ScryptedDevice | null> => {
-    try {
-      const ac = new AbortController();
-      const t = setTimeout(() => ac.abort(), 5000);
-      const url = `${baseUrl}/endpoint/@scrypted/rebroadcast/public/${id}/stream.m3u8?scryptedToken=${encodeURIComponent(token)}`;
-      const r = await fetch(url, { method: 'HEAD', agent: _tlsAgent, signal: ac.signal } as Parameters<typeof fetch>[1]);
-      clearTimeout(t);
-      if (r.status !== 200) return null;
-      let name = `Camera #${id}`;
+  const check = async (id: number): Promise<ScanResult | null> => {
+    // Try scryptedToken as query param (standard), then as Authorization header
+    const urls = [
+      `${baseUrl}/endpoint/@scrypted/rebroadcast/public/${id}/stream.m3u8?scryptedToken=${encodeURIComponent(token)}`,
+      `${baseUrl}/endpoint/@scrypted/rebroadcast/public/${id}/stream.m3u8?token=${encodeURIComponent(token)}`,
+    ];
+    for (const url of urls) {
       try {
-        const nr = await fetch(`${baseUrl}/device/${id}?scryptedToken=${encodeURIComponent(token)}`, { agent: _tlsAgent } as Parameters<typeof fetch>[1]);
-        if (nr.ok) { const d = await nr.json() as { name?: string }; if (d.name) name = d.name; }
-      } catch {}
-      return { id: String(id), name, interfaces: ['VideoCamera'] };
-    } catch { return null; }
+        const ac = new AbortController();
+        const t = setTimeout(() => ac.abort(), 4000);
+        const r = await fetch(url, {
+          method: 'HEAD',
+          agent: _tlsAgent,
+          signal: ac.signal,
+          redirect: 'follow',
+        } as Parameters<typeof fetch>[1]);
+        clearTimeout(t);
+        // 200 or any 2xx = valid stream; 302/3xx already followed by redirect:follow
+        if (r.status >= 200 && r.status < 300) {
+          let name = `Camera #${id}`;
+          try {
+            const nr = await fetch(
+              `${baseUrl}/endpoint/@scrypted/core/api/deviceByName?scryptedToken=${encodeURIComponent(token)}&id=${id}`,
+              { agent: _tlsAgent } as Parameters<typeof fetch>[1],
+            );
+            if (nr.ok) {
+              const d = await nr.json() as { name?: string };
+              if (d.name) name = d.name;
+            }
+          } catch {}
+          return { id, status: r.status, name };
+        }
+      } catch { /* try next url */ }
+    }
+    return null;
   };
 
-  const results = await Promise.allSettled(Array.from({ length: 60 }, (_, i) => check(i + 1)));
-  return results.map(r => r.status === 'fulfilled' ? r.value : null).filter((v): v is ScryptedDevice => v !== null);
+  const results = await Promise.allSettled(Array.from({ length: maxId }, (_, i) => check(i + 1)));
+  return results
+    .map(r => r.status === 'fulfilled' ? r.value : null)
+    .filter((v): v is ScanResult => v !== null);
+}
+
+async function getScryptedCamerasViaScan(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
+  const found = await scanScryptedRebroadcast(baseUrl, token, 200);
+  return found.map(s => ({ id: String(s.id), name: s.name, interfaces: ['VideoCamera'] }));
 }
 
 // ── engine.io RPC (polling → WebSocket upgrade, same as Scrypted SDK) ─────────

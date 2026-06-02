@@ -539,17 +539,23 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
 
     <div class="card" style="margin-top:12px">
       <div style="font-size:13px;font-weight:600;color:var(--fg);margin-bottom:4px">Manual Device IDs</div>
-      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">If auto-discovery fails, enter each camera's Scrypted device ID manually. Find it in Scrypted UI: open the camera → look at the URL <code style="background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px">#/device/123</code> → ID is <code style="background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px">123</code>.</p>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Enter each camera's Scrypted device ID. Open Scrypted → click the camera → the URL shows <code style="background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px">#/device/123</code> → enter <code style="background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px">123</code>.</p>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Or use <b>Scan Cameras</b> to auto-detect available IDs.</p>
       <div id="sc-manual-ids">
         <div style="color:var(--muted);font-size:12px">Loading cameras…</div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-p" onclick="saveScryptedDeviceIds()">
           <span class="spin" id="sc-did-spin" style="display:none"></span>
           <span id="sc-did-txt">Save Device IDs</span>
         </button>
+        <button class="btn btn-s" onclick="scanScrypted()" id="sc-scan-btn" style="display:none">
+          <span class="spin" id="sc-scan-spin" style="display:none"></span>
+          <span id="sc-scan-txt">Scan Cameras</span>
+        </button>
         <div id="sc-did-ok" style="display:none;font-size:12px;color:#6ee7b7">✅ Saved — live streaming is now active!</div>
       </div>
+      <div id="sc-scan-out" style="display:none;margin-top:12px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px;font-size:12px;color:#94a3b8"></div>
     </div>
   </div>
 
@@ -1896,9 +1902,12 @@ async function saveReconfig() {
 
 // ── Scrypted ──────────────────────────────────────────────────────────────────
 async function loadScryptedSection() {
-  // Show debug button if Scrypted is already configured
+  // Show debug + scan buttons if Scrypted is already configured
   const cfg = await api('GET', '/api/config').catch(() => null);
-  if (cfg?.scryptedConfigured) document.getElementById('sc-dbg-btn').style.display = 'inline-flex';
+  if (cfg?.scryptedConfigured) {
+    document.getElementById('sc-dbg-btn').style.display = 'inline-flex';
+    document.getElementById('sc-scan-btn').style.display = 'inline-flex';
+  }
   try {
     const layout = await api('GET', '/api/layout');
     const cams = layout.security?.cameras ?? [];
@@ -1930,6 +1939,53 @@ async function saveScryptedDeviceIds() {
     document.getElementById('sc-did-ok').style.display = 'inline';
   } catch (e) { alert('Save failed: ' + e.message); }
   finally { document.getElementById('sc-did-spin').style.display = 'none'; document.getElementById('sc-did-txt').textContent = 'Save Device IDs'; }
+}
+
+async function scanScrypted() {
+  const out  = document.getElementById('sc-scan-out');
+  const spin = document.getElementById('sc-scan-spin');
+  const txt  = document.getElementById('sc-scan-txt');
+  out.style.display = 'block';
+  out.innerHTML = 'Scanning IDs 1–200… this takes ~30 seconds.';
+  spin.style.display = 'inline-block';
+  txt.textContent = 'Scanning…';
+  try {
+    const results = await api('GET', '/api/scrypted/scan');
+    if (results.error) { out.textContent = 'Error: ' + results.error; return; }
+    if (!results.length) {
+      out.innerHTML = '<span style="color:#f87171">No rebroadcast streams found (IDs 1–200). ' +
+        'Check that the Scrypted Rebroadcast plugin is installed and cameras are added.</span>';
+      return;
+    }
+    // Render results with "Use for camera" buttons
+    const layout = await api('GET', '/api/layout');
+    const cameras = layout.security?.cameras ?? [];
+    out.innerHTML = `<div style="margin-bottom:8px;font-weight:600;color:#f1f5f9">Found ${results.length} active stream(s):</div>` +
+      results.map(r => {
+        const camOpts = cameras.map(c =>
+          `<option value="${c.entity}">${c.label ?? c.entity}</option>`).join('');
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+          <span style="background:rgba(74,222,128,.15);color:#4ade80;border:1px solid rgba(74,222,128,.3);padding:2px 8px;border-radius:20px;font-size:11px">ID ${r.id}</span>
+          <span style="color:#f1f5f9;flex:1">${r.name}</span>
+          <select id="scan-sel-${r.id}" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:#f1f5f9;padding:4px 6px;font-size:11px">
+            <option value="">— assign to camera —</option>${camOpts}
+          </select>
+          <button class="btn btn-s btn-sm" onclick="assignScanResult(${r.id})" style="padding:4px 10px;font-size:11px">Assign</button>
+        </div>`;
+      }).join('');
+  } catch (e) { out.textContent = 'Error: ' + e.message; }
+  finally { spin.style.display = 'none'; txt.textContent = 'Scan Cameras'; }
+}
+
+async function assignScanResult(deviceId) {
+  const sel = document.getElementById(`scan-sel-${deviceId}`);
+  if (!sel || !sel.value) { alert('Select a camera first'); return; }
+  await api('POST', '/api/scrypted/device-id', { entityId: sel.value, scryptedId: String(deviceId) });
+  // Update the manual IDs input too
+  const inp = document.querySelector(`#sc-manual-ids input[data-entity="${sel.value}"]`);
+  if (inp) inp.value = String(deviceId);
+  toast(`Assigned ID ${deviceId} to ${sel.value}`);
+  document.getElementById('sc-did-ok').style.display = 'inline';
 }
 
 async function debugScrypted() {
@@ -1966,6 +2022,7 @@ async function saveScrypted() {
     const d = await api('POST', '/api/scrypted/config', { scryptedUrl: url, scryptedUsername: user, scryptedPassword: pass });
     if (!d.ok) { errEl.textContent = d.error || 'Failed'; errEl.className = 'err show'; return; }
     document.getElementById('sc-dbg-btn').style.display = 'inline-flex';
+    document.getElementById('sc-scan-btn').style.display = 'inline-flex';
     // Discover cameras
     const cams = await api('GET', '/api/scrypted/cameras');
     if (cams.error) {
