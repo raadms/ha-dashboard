@@ -1,10 +1,13 @@
 import express from 'express';
 import { createServer } from 'http';
+import https from 'https';
 import { WebSocketServer, WebSocket as WsClient } from 'ws';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import webpush from 'web-push';
+
+const _tlsAgent = new https.Agent({ rejectUnauthorized: false });
 import { validateUserLogin, signToken, hashPassword, verifyToken } from './auth.js';
 import { setupWsProxy } from './ws-proxy.js';
 import { isConfigured, loadConfig, saveConfig, getConfig, DATA_DIR } from './config.js';
@@ -423,7 +426,9 @@ app.get('/api/hls/:sid/:file', async (req, res) => {
       upstreamUrl = `${session.baseUrl}${file}?${session.tokenParam}`;
       headers = {};
     }
-    const r = await fetch(upstreamUrl, { headers });
+    const fetchOpts: Record<string, unknown> = { headers };
+    if (session.kind === 'scrypted') fetchOpts.agent = _tlsAgent;
+    const r = await fetch(upstreamUrl, fetchOpts as Parameters<typeof fetch>[1]);
     if (!r.ok) return res.status(r.status).send('Upstream error');
     const ct = r.headers.get('content-type') ?? 'application/octet-stream';
     res.setHeader('Content-Type', ct);
@@ -600,6 +605,20 @@ app.post('/api/scrypted/config', async (req, res) => {
   const prev = getConfig()!;
   saveConfig({ ...prev, scryptedUrl: scryptedUrl.replace(/\/$/, ''), scryptedUsername, scryptedPassword });
   invalidateScryptedCache();
+  res.json({ ok: true });
+});
+
+// Admin: set Scrypted device ID for a specific camera (bypasses RPC discovery)
+app.post('/api/scrypted/device-id', (req, res) => {
+  const payload = authToken(req);
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const { entityId, scryptedId } = req.body as { entityId?: string; scryptedId?: string };
+  if (!entityId) return res.status(400).json({ error: 'entityId required' });
+  const layout = getLayout();
+  const cam = layout.security.cameras.find(c => c.entity === entityId);
+  if (!cam) return res.status(404).json({ error: 'Camera not found in layout' });
+  if (scryptedId) cam.scryptedId = scryptedId; else delete cam.scryptedId;
+  saveLayout(layout);
   res.json({ ok: true });
 });
 

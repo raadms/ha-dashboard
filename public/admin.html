@@ -531,6 +531,21 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
         <div id="sc-cam-list"></div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:12px">
+      <div style="font-size:13px;font-weight:600;color:var(--fg);margin-bottom:4px">Manual Device IDs</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">If auto-discovery fails, enter each camera's Scrypted device ID manually. Find it in Scrypted UI: open the camera → look at the URL <code style="background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px">#/device/123</code> → ID is <code style="background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px">123</code>.</p>
+      <div id="sc-manual-ids">
+        <div style="color:var(--muted);font-size:12px">Loading cameras…</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+        <button class="btn btn-p" onclick="saveScryptedDeviceIds()">
+          <span class="spin" id="sc-did-spin" style="display:none"></span>
+          <span id="sc-did-txt">Save Device IDs</span>
+        </button>
+        <div id="sc-did-ok" style="display:none;font-size:12px;color:#6ee7b7">✅ Saved — live streaming is now active!</div>
+      </div>
+    </div>
   </div>
 
   <!-- SCANNER -->
@@ -870,6 +885,7 @@ function goSec(name) {
   if (name === 'scanner' && !_scanEnts) loadScanner();
   if (name === 'push') loadPushSection();
   if (name === 'reconfig') loadReconfigSection();
+  if (name === 'scrypted') loadScryptedSection();
 }
 
 // ── RENDER ALL ────────────────────────────────────────────────────────────────
@@ -1874,6 +1890,40 @@ async function saveReconfig() {
 }
 
 // ── Scrypted ──────────────────────────────────────────────────────────────────
+async function loadScryptedSection() {
+  try {
+    const layout = await api('GET', '/api/layout');
+    const cams = layout.security?.cameras ?? [];
+    const el = document.getElementById('sc-manual-ids');
+    if (!cams.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">No cameras configured in Security section yet.</div>'; return; }
+    el.innerHTML = cams.map(cam => `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.04);border-radius:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:#f1f5f9">${cam.label ?? cam.entity}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${cam.entity}</div>
+        </div>
+        <input data-entity="${cam.entity}" value="${cam.scryptedId ?? ''}" placeholder="e.g. 12"
+               style="width:110px;font-size:12px;padding:6px 8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#f1f5f9;outline:none"
+               title="Scrypted device ID (from #/device/ID in Scrypted URL)"/>
+      </div>`).join('');
+  } catch { document.getElementById('sc-manual-ids').textContent = 'Failed to load cameras.'; }
+}
+
+async function saveScryptedDeviceIds() {
+  const inputs = document.querySelectorAll('#sc-manual-ids input[data-entity]');
+  if (!inputs.length) return;
+  document.getElementById('sc-did-spin').style.display = 'inline-block';
+  document.getElementById('sc-did-txt').textContent = 'Saving…';
+  document.getElementById('sc-did-ok').style.display = 'none';
+  try {
+    for (const inp of inputs) {
+      await api('POST', '/api/scrypted/device-id', { entityId: inp.dataset.entity, scryptedId: inp.value.trim() || null });
+    }
+    document.getElementById('sc-did-ok').style.display = 'inline';
+  } catch (e) { alert('Save failed: ' + e.message); }
+  finally { document.getElementById('sc-did-spin').style.display = 'none'; document.getElementById('sc-did-txt').textContent = 'Save Device IDs'; }
+}
+
 async function saveScrypted() {
   const url  = document.getElementById('sc-url').value.trim();
   const user = document.getElementById('sc-user').value.trim();
