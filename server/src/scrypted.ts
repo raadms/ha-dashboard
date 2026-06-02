@@ -39,53 +39,13 @@ export async function getScryptedToken(baseUrl: string, username: string, passwo
 
 export async function getScryptedCameras(baseUrl: string, username: string, password: string): Promise<ScryptedDevice[]> {
   if (_systemState && Date.now() < _stateExpiry) return _systemState;
-
-  // Try official @scrypted/client first, fall back to raw RPC
-  try {
-    const cameras = await getScryptedCamerasViaSDK(baseUrl, username, password);
-    _systemState = cameras; _stateExpiry = Date.now() + 10 * 60_000;
-    return cameras;
-  } catch (sdkErr) {
-    console.warn('[Scrypted] SDK failed, trying raw RPC:', (sdkErr as Error).message);
-    try {
-      const token = await getScryptedToken(baseUrl, username, password);
-      const cameras = await getScryptedCamerasViaRpc(baseUrl, token);
-      _systemState = cameras; _stateExpiry = Date.now() + 10 * 60_000;
-      return cameras;
-    } catch (rpcErr) {
-      throw new Error(`SDK: ${(sdkErr as Error).message} | RPC: ${(rpcErr as Error).message}`);
-    }
-  }
+  const token = await getScryptedToken(baseUrl, username, password);
+  const cameras = await getScryptedCamerasViaRpc(baseUrl, token);
+  _systemState = cameras; _stateExpiry = Date.now() + 10 * 60_000;
+  return cameras;
 }
 
-// ── Official @scrypted/client SDK ─────────────────────────────────────────────
-
-async function getScryptedCamerasViaSDK(baseUrl: string, username: string, password: string): Promise<ScryptedDevice[]> {
-  // Dynamic import with any-cast to avoid TypeScript type issues with @scrypted/client
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mod = await import('@scrypted/client') as any;
-  const connectScryptedClient = mod.connectScryptedClient ?? mod.default?.connectScryptedClient;
-  if (typeof connectScryptedClient !== 'function') throw new Error('@scrypted/client: connectScryptedClient not found');
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const client: any = await connectScryptedClient({ baseUrl, username, password });
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const state: Record<string, Record<string, { value?: unknown }>> = client.systemManager.getSystemState() as any;
-    const cameras: ScryptedDevice[] = [];
-    for (const [id, props] of Object.entries(state)) {
-      const ifaces = (props.interfaces?.value ?? []) as string[];
-      if (ifaces.some(i => ['VideoCamera', 'Camera', 'VideoRecorder', 'RTCSignalingChannel'].includes(i))) {
-        cameras.push({ id, name: (props.name?.value as string) ?? id, interfaces: ifaces });
-      }
-    }
-    return cameras;
-  } finally {
-    try { client.disconnect?.(); } catch { /* ignore */ }
-  }
-}
-
-// ── Raw engine.io RPC fallback ────────────────────────────────────────────────
+// ── Raw engine.io RPC ─────────────────────────────────────────────────────────
 
 function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
   return new Promise((resolve, reject) => {
