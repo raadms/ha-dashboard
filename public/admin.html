@@ -1890,7 +1890,11 @@ async function saveScrypted() {
     if (!d.ok) { errEl.textContent = d.error || 'Failed'; errEl.className = 'err show'; return; }
     // Discover cameras
     const cams = await api('GET', '/api/scrypted/cameras');
-    if (Array.isArray(cams) && cams.length) {
+    if (cams.error) {
+      errEl.textContent = `Camera discovery failed: ${cams.error}`;
+      errEl.className = 'err show';
+      okEl.textContent = '✅ Credentials saved (but camera discovery failed — see error above).';
+    } else if (Array.isArray(cams) && cams.length) {
       const list = document.getElementById('sc-cam-list');
       list.innerHTML = cams.map(c =>
         `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,.05);border-radius:8px;margin-bottom:6px;font-size:12px">
@@ -1900,7 +1904,7 @@ async function saveScrypted() {
       document.getElementById('sc-cameras').style.display = 'block';
       okEl.textContent = `✅ Connected — ${cams.length} camera${cams.length > 1 ? 's' : ''} found. Live streaming is now active.`;
     } else {
-      okEl.textContent = '✅ Credentials saved. No VideoCamera devices found in Scrypted yet.';
+      okEl.textContent = '✅ Credentials saved. No camera devices found in Scrypted (check user permissions).';
     }
     okEl.style.display = 'block';
     toast('Scrypted connected ✓');

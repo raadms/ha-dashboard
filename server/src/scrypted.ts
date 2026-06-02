@@ -3,30 +3,21 @@ import https from 'https';
 
 const _tlsAgent = new https.Agent({ rejectUnauthorized: false });
 
-// Minimal Scrypted engine.io RPC client — just enough to get system state
-// and derive rebroadcast HLS URLs for cameras.
-
 export interface ScryptedDevice {
   id: string;
   name: string;
   interfaces: string[];
 }
 
-interface RpcMsg {
-  id?: string;
-  type: string;
-  param?: string;
-  proxyId?: string;
-  method?: string | null;
-  args?: unknown[];
-  result?: unknown;
-  throw?: boolean;
-}
-
 let _systemState: ScryptedDevice[] | null = null;
 let _stateExpiry = 0;
 let _cachedToken: string | null = null;
 let _tokenExpiry = 0;
+
+export function invalidateScryptedCache() {
+  _cachedToken = null; _tokenExpiry = 0;
+  _systemState = null; _stateExpiry = 0;
+}
 
 export async function getScryptedToken(baseUrl: string, username: string, password: string): Promise<string> {
   if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
@@ -40,141 +31,137 @@ export async function getScryptedToken(baseUrl: string, username: string, passwo
   if (!r.ok) throw new Error(`Scrypted login ${r.status}`);
   const data = await r.json() as { authorization?: string; queryToken?: { scryptedToken?: string } };
   const token = data.queryToken?.scryptedToken ?? data.authorization?.replace('Bearer ', '');
-  if (!token) throw new Error('No token in Scrypted response');
+  if (!token) throw new Error('No token in Scrypted login response');
   _cachedToken = token;
   _tokenExpiry = Date.now() + 23 * 3600_000;
   return token;
 }
 
-export function invalidateScryptedCache() {
-  _cachedToken = null;
-  _tokenExpiry = 0;
-  _systemState = null;
-  _stateExpiry = 0;
-}
-
 export async function getScryptedCameras(baseUrl: string, username: string, password: string): Promise<ScryptedDevice[]> {
   if (_systemState && Date.now() < _stateExpiry) return _systemState;
-  const token = await getScryptedToken(baseUrl, username, password);
-  const state = await fetchScryptedSystemState(baseUrl, token);
-  _systemState = state;
-  _stateExpiry = Date.now() + 10 * 60_000; // re-discover every 10 min
-  return state;
+
+  // Try official @scrypted/client first, fall back to raw RPC
+  try {
+    const cameras = await getScryptedCamerasViaSDK(baseUrl, username, password);
+    _systemState = cameras; _stateExpiry = Date.now() + 10 * 60_000;
+    return cameras;
+  } catch (sdkErr) {
+    console.warn('[Scrypted] SDK failed, trying raw RPC:', (sdkErr as Error).message);
+    try {
+      const token = await getScryptedToken(baseUrl, username, password);
+      const cameras = await getScryptedCamerasViaRpc(baseUrl, token);
+      _systemState = cameras; _stateExpiry = Date.now() + 10 * 60_000;
+      return cameras;
+    } catch (rpcErr) {
+      throw new Error(`SDK: ${(sdkErr as Error).message} | RPC: ${(rpcErr as Error).message}`);
+    }
+  }
 }
 
-function fetchScryptedSystemState(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
+// ── Official @scrypted/client SDK ─────────────────────────────────────────────
+
+async function getScryptedCamerasViaSDK(baseUrl: string, username: string, password: string): Promise<ScryptedDevice[]> {
+  // Dynamic import — package may not be available in all environments
+  const { connectScryptedClient } = await import('@scrypted/client');
+
+  const client = await connectScryptedClient({ baseUrl, username, password });
+  try {
+    const state = client.systemManager.getSystemState() as Record<string, Record<string, { value?: unknown }>>;
+    const cameras: ScryptedDevice[] = [];
+    for (const [id, props] of Object.entries(state)) {
+      const ifaces = (props.interfaces?.value ?? []) as string[];
+      if (ifaces.some(i => i === 'VideoCamera' || i === 'Camera' || i === 'VideoRecorder')) {
+        cameras.push({ id, name: (props.name?.value as string) ?? id, interfaces: ifaces });
+      }
+    }
+    return cameras;
+  } finally {
+    try { (client as unknown as { disconnect?: () => void }).disconnect?.(); } catch { /* ignore */ }
+  }
+}
+
+// ── Raw engine.io RPC fallback ────────────────────────────────────────────────
+
+function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
   return new Promise((resolve, reject) => {
     const wsUrl =
-      baseUrl.replace(/^https?/, m => (m === 'https' ? 'wss' : 'ws')) +
+      baseUrl.replace(/^https?/, m => m === 'https' ? 'wss' : 'ws') +
       `/endpoint/@scrypted/core/engine.io/api/?EIO=4&transport=websocket&scryptedToken=${encodeURIComponent(token)}`;
 
     const ws = new WebSocket(wsUrl, { rejectUnauthorized: false });
-    const deadline = setTimeout(() => { ws.terminate(); reject(new Error('Scrypted RPC timeout')); }, 20_000);
+    const deadline = setTimeout(() => { ws.terminate(); reject(new Error('RPC timeout after 20s')); }, 20_000);
 
-    // Local proxy registry: proxyId → function or object-with-methods
-    const proxies = new Map<string, unknown>();
+    const proxies = new Map<string, object | ((...a: unknown[]) => unknown)>();
+    let resolved = false;
 
-    // The io object the server calls after getRemote completes
-    const IO_ID = '__io__';
-    proxies.set(IO_ID, {
-      setSystemState: (rawState: unknown) => {
-        clearTimeout(deadline);
-        ws.close();
+    function done(cameras: ScryptedDevice[]) {
+      if (resolved) return; resolved = true;
+      clearTimeout(deadline); ws.close();
+      resolve(cameras);
+    }
+
+    // io object the Scrypted server calls after handshake
+    proxies.set('__io__', {
+      setSystemState: (raw: unknown) => {
         try {
-          const devices = parseSystemState(rawState as Record<string, Record<string, { value?: unknown }>>);
-          resolve(devices);
+          const cameras = parseSystemState(raw as Record<string, Record<string, { value?: unknown }>>);
+          done(cameras);
         } catch (e) { reject(e); }
       },
-      notify: () => null,
-      ioEvent: () => null,
-      getMediaManager: () => null,
-      setNativeId: () => null,
+      notify: () => null, ioEvent: () => null, getMediaManager: () => null, setNativeId: () => null,
     });
 
-    // getRemote: called by the server with (systemManager, deviceManager, opts)
-    const GR_ID = '__getRemote__';
-    proxies.set(GR_ID, async () => {
-      // Return the io object proxy reference
-      return { __type: 'Object', id: IO_ID };
-    });
+    // getRemote — server asks for this, then calls it with (systemManager, deviceManager, opts)
+    proxies.set('__getRemote__', async () => ({ __type: 'Object', id: '__io__' }));
 
-    function send(msg: RpcMsg) {
-      ws.send('4' + JSON.stringify(msg));
-    }
+    function send(msg: object) { ws.send('4' + JSON.stringify(msg)); }
 
     ws.on('message', async (raw: Buffer) => {
       const str = raw.toString();
-      // EIO ping → pong
       if (str[0] === '2') { ws.send('3'); return; }
-      // Only handle EIO message packets
       if (str[0] !== '4') return;
+      let msg: Record<string, unknown>;
+      try { msg = JSON.parse(str.slice(1)) as Record<string, unknown>; } catch { return; }
 
-      let msg: RpcMsg;
-      try { msg = JSON.parse(str.slice(1)) as RpcMsg; } catch { return; }
-
-      if (msg.type === 'param' && msg.param === 'getRemote') {
-        // Server wants our getRemote function
-        send({ id: msg.id, type: 'result', result: { __type: 'Object', id: GR_ID } });
+      if (msg.type === 'param') {
+        // Server wants a value by name — give it our io proxy for both 'getRemote' and any other param
+        const id = msg.param === 'getRemote' ? '__getRemote__' : '__io__';
+        send({ id: msg.id, type: 'result', result: { __type: 'Object', id } });
 
       } else if (msg.type === 'apply') {
-        const { id, proxyId, method, args = [] } = msg;
-        if (!proxyId) return;
+        const proxyId = msg.proxyId as string;
+        const method = msg.method as string | undefined;
+        const args = (msg.args as unknown[]) ?? [];
         const proxy = proxies.get(proxyId);
-        if (proxy === undefined) {
-          send({ id, type: 'result', result: null });
-          return;
-        }
+        if (!proxy) { send({ id: msg.id, type: 'result', result: null }); return; }
         try {
           let result: unknown;
-          if (method) {
-            const fn = (proxy as Record<string, unknown>)[method];
-            result = typeof fn === 'function'
-              ? await (fn as (...a: unknown[]) => unknown)(...deserializeArgs(args))
-              : null;
-          } else {
-            result = typeof proxy === 'function'
-              ? await (proxy as (...a: unknown[]) => unknown)(...deserializeArgs(args))
-              : null;
+          if (method && typeof (proxy as Record<string, unknown>)[method] === 'function') {
+            result = await ((proxy as Record<string, unknown>)[method] as (...a: unknown[]) => unknown)(...args);
+          } else if (typeof proxy === 'function') {
+            result = await proxy(...args);
           }
-          send({ id, type: 'result', result: serializeResult(result) });
+          send({ id: msg.id, type: 'result', result: result ?? null });
         } catch (e) {
-          send({ id, type: 'result', result: (e as Error).message, throw: true });
+          send({ id: msg.id, type: 'result', result: (e as Error).message, throw: true });
         }
       }
     });
 
     ws.on('error', e => { clearTimeout(deadline); reject(e); });
-    ws.on('close', (_code, reason) => {
-      clearTimeout(deadline);
-      // Only reject if we haven't already resolved
-      if (!_systemState) reject(new Error(`Scrypted WS closed: ${reason}`));
-    });
+    ws.on('close', () => { if (!resolved) { clearTimeout(deadline); reject(new Error('WS closed before system state')); } });
   });
-}
-
-function deserializeArgs(args: unknown[]): unknown[] {
-  return args.map(a => {
-    if (a && typeof a === 'object') {
-      const o = a as Record<string, unknown>;
-      if (o.__type === 'Object') return { _remoteProxy: o.id }; // opaque placeholder
-    }
-    return a;
-  });
-}
-
-function serializeResult(v: unknown): unknown {
-  if (v && typeof v === 'object' && '__type' in (v as object)) return v;
-  return v;
 }
 
 function parseSystemState(raw: Record<string, Record<string, { value?: unknown }>>): ScryptedDevice[] {
-  const out: ScryptedDevice[] = [];
-  for (const [id, props] of Object.entries(raw)) {
-    const interfaces = (props.interfaces?.value ?? []) as string[];
-    const name = (props.name?.value ?? id) as string;
-    if (interfaces.includes('VideoCamera')) {
-      out.push({ id, name, interfaces });
-    }
-  }
-  return out;
+  return Object.entries(raw)
+    .filter(([, props]) => {
+      const ifaces = (props.interfaces?.value ?? []) as string[];
+      return ifaces.some(i => ['VideoCamera', 'Camera', 'VideoRecorder', 'RTCSignalingChannel'].includes(i));
+    })
+    .map(([id, props]) => ({
+      id,
+      name: (props.name?.value as string) ?? id,
+      interfaces: (props.interfaces?.value as string[]) ?? [],
+    }));
 }
