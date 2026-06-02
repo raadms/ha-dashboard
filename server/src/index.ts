@@ -623,6 +623,15 @@ app.get('/api/scrypted/scan', async (req, res) => {
   }
 });
 
+// Admin: get Scrypted config (URL + username, no password)
+app.get('/api/scrypted/config', (req, res) => {
+  const payload = authToken(req);
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const config = getConfig();
+  if (!config?.scryptedUrl) return res.json({ configured: false });
+  res.json({ configured: true, scryptedUrl: config.scryptedUrl, scryptedUsername: config.scryptedUsername ?? '' });
+});
+
 // Admin: save Scrypted credentials
 app.post('/api/scrypted/config', async (req, res) => {
   const payload = authToken(req);

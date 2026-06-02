@@ -1902,11 +1902,26 @@ async function saveReconfig() {
 
 // ── Scrypted ──────────────────────────────────────────────────────────────────
 async function loadScryptedSection() {
-  // Show debug + scan buttons if Scrypted is already configured
-  const cfg = await api('GET', '/api/config').catch(() => null);
-  if (cfg?.scryptedConfigured) {
-    document.getElementById('sc-dbg-btn').style.display = 'inline-flex';
+  // Pre-fill saved credentials and show extra buttons if already configured
+  const scCfg = await api('GET', '/api/scrypted/config').catch(() => null);
+  if (scCfg?.configured) {
+    document.getElementById('sc-url').value  = scCfg.scryptedUrl  ?? '';
+    document.getElementById('sc-user').value = scCfg.scryptedUsername ?? '';
+    document.getElementById('sc-dbg-btn').style.display  = 'inline-flex';
     document.getElementById('sc-scan-btn').style.display = 'inline-flex';
+    // Also try to load discovered cameras
+    try {
+      const cams = await api('GET', '/api/scrypted/cameras');
+      if (Array.isArray(cams) && cams.length) {
+        const list = document.getElementById('sc-cam-list');
+        list.innerHTML = cams.map(c =>
+          `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,.05);border-radius:8px;margin-bottom:6px;font-size:12px">
+            <span style="font-size:16px">📷</span>
+            <div><div style="font-weight:600;color:#f1f5f9">${c.name}</div><div style="color:var(--muted);margin-top:2px">Device ID: ${c.id}</div></div>
+          </div>`).join('');
+        document.getElementById('sc-cameras').style.display = 'block';
+      }
+    } catch { /* ignore */ }
   }
   try {
     const layout = await api('GET', '/api/layout');
@@ -2037,6 +2052,26 @@ async function saveScrypted() {
           <div><div style="font-weight:600;color:#f1f5f9">${c.name}</div><div style="color:var(--muted);margin-top:2px">Device ID: ${c.id}</div></div>
         </div>`).join('');
       document.getElementById('sc-cameras').style.display = 'block';
+      // Auto-assign discovered IDs to matching layout cameras
+      try {
+        const layout = await api('GET', '/api/layout');
+        const layoutCams = layout.security?.cameras ?? [];
+        for (const scCam of cams) {
+          const name = scCam.name.toLowerCase();
+          const match = layoutCams.find(lc => {
+            const lbl = (lc.label ?? lc.entity).toLowerCase();
+            return name === lbl ||
+              name.includes(lbl.split(' ')[0]) ||
+              lbl.includes(name.split(' ')[0]);
+          });
+          if (match && !match.scryptedId) {
+            await api('POST', '/api/scrypted/device-id', { entityId: match.entity, scryptedId: String(scCam.id) });
+            // update manual IDs input if visible
+            const inp = document.querySelector(`#sc-manual-ids input[data-entity="${match.entity}"]`);
+            if (inp) inp.value = String(scCam.id);
+          }
+        }
+      } catch { /* auto-assign is best-effort */ }
       okEl.textContent = `✅ Connected — ${cams.length} camera${cams.length > 1 ? 's' : ''} found. Live streaming is now active.`;
     } else {
       okEl.textContent = '✅ Credentials saved. No camera devices found in Scrypted (check user permissions).';
