@@ -150,11 +150,11 @@ export async function debugScryptedConnection(baseUrl: string, username: string,
       try { msg = JSON.parse(s.slice(1)) as Record<string, unknown>; } catch { return; }
       if (msg.type === 'param') {
         if (msg.param === 'getRemote') {
-          // Same fix as RPC: return IO proxy directly with proxyProps
-          rpcSend({ id: msg.id, type: 'result', result: { __type: 'Object', id: dbgIoId, __proxyProps: dbgIoProxyProps } });
-        } else {
-          rpcSend({ id: msg.id, type: 'result', result: { __type: 'Object', id: dbgIoId } });
+          // Call Scrypted's getRemote proxy (msg.id = their proxy ID)
+          const callId = Math.random().toString(36).slice(2, 10);
+          rpcSend({ type: 'apply', proxyId: msg.id, id: callId, args: [{ __type: 'Object', id: dbgIoId, __proxyProps: dbgIoProxyProps }] });
         }
+        // other param types: no response
       } else if (msg.type === 'apply') {
         const proxy = proxies.get(msg.proxyId as string);
         if (!proxy) { rpcSend({ id: msg.id, type: 'result', result: null }); return; }
@@ -326,11 +326,13 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
 
       if (msg.type === 'param') {
         if (msg.param === 'getRemote') {
-          // Try approach A: return IO proxy directly (with method list so server knows what's available)
-          send({ id: msg.id, type: 'result', result: { __type: 'Object', id: ioId, __proxyProps: _ioProxyProps } });
-        } else {
-          send({ id: msg.id, type: 'result', result: { __type: 'Object', id: ioId } });
+          // msg.id is Scrypted's proxy ID for its own getRemote function.
+          // We CALL it (not respond to it) passing our IO proxy.
+          // Scrypted stores our proxy then calls setSystemState on it.
+          const callId = Math.random().toString(36).slice(2, 10);
+          send({ type: 'apply', proxyId: msg.id, id: callId, args: [{ __type: 'Object', id: ioId, __proxyProps: _ioProxyProps }] });
         }
+        // other param types: ignore (no result expected)
       } else if (msg.type === 'apply') {
         const proxyId = msg.proxyId as string;
         const method = msg.method as string | undefined;
