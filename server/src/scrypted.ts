@@ -38,23 +38,104 @@ export async function getScryptedToken(baseUrl: string, username: string, passwo
 }
 
 export async function getScryptedCameras(baseUrl: string, username: string, password: string): Promise<ScryptedDevice[]> {
-  if (_systemState && Date.now() < _stateExpiry) return _systemState;
+  if (_systemState && _systemState.length > 0 && Date.now() < _stateExpiry) return _systemState;
   const token = await getScryptedToken(baseUrl, username, password);
 
+  let rpcError = '';
   let cameras: ScryptedDevice[] = [];
+
   try {
     cameras = await getScryptedCamerasViaRpc(baseUrl, token);
-  } catch {
-    // RPC failed (limited user or protocol mismatch) — scan rebroadcast endpoints
-    cameras = await getScryptedCamerasViaScan(baseUrl, token);
+    console.log(`[Scrypted] RPC returned ${cameras.length} camera(s)`);
+  } catch (e) {
+    rpcError = (e as Error).message;
+    console.error('[Scrypted] RPC failed:', rpcError);
+    try {
+      cameras = await getScryptedCamerasViaScan(baseUrl, token);
+      console.log(`[Scrypted] Rebroadcast scan returned ${cameras.length} camera(s)`);
+    } catch (e2) {
+      console.error('[Scrypted] Scan failed:', (e2 as Error).message);
+    }
   }
 
-  _systemState = cameras; _stateExpiry = Date.now() + 10 * 60_000;
-  return cameras;
+  if (cameras.length > 0) {
+    _systemState = cameras;
+    _stateExpiry = Date.now() + 10 * 60_000;
+    return cameras;
+  }
+
+  // Propagate the actual error so the admin panel can show what went wrong
+  throw new Error(rpcError || 'Scrypted returned no camera devices');
 }
 
-// Scan /endpoint/@scrypted/rebroadcast/public/{id}/stream.m3u8 for IDs 1–60
-// Returns any device IDs that have an active HLS stream (no RPC required)
+// ── Debug: captures raw polling + WS messages (used by /api/scrypted/debug) ──
+
+export interface ScryptedDebugInfo {
+  token: string;
+  pollStatus: number;
+  pollBody: string;
+  sid: string;
+  wsMessages: string[];
+  wsCloseCode: number;
+  wsCloseReason: string;
+  wsError: string;
+}
+
+export async function debugScryptedConnection(baseUrl: string, username: string, password: string): Promise<ScryptedDebugInfo> {
+  const { default: fetch } = await import('node-fetch');
+  const info: Partial<ScryptedDebugInfo> & Record<string, unknown> = {
+    token: '', pollStatus: 0, pollBody: '', sid: '',
+    wsMessages: [], wsCloseCode: 0, wsCloseReason: '', wsError: '',
+  };
+
+  const token = await getScryptedToken(baseUrl, username, password);
+  info.token = token.slice(0, 12) + '…';
+
+  const apiBase = `${baseUrl}/endpoint/@scrypted/core/engine.io/api/`;
+  try {
+    const r = await fetch(`${apiBase}?EIO=4&transport=polling&scryptedToken=${encodeURIComponent(token)}`,
+      { agent: _tlsAgent } as Parameters<typeof fetch>[1]);
+    info.pollStatus = r.status;
+    const body = await r.text();
+    info.pollBody = body.slice(0, 500);
+    const stripped = body.replace(/^\d+:/, '');
+    const m = stripped.match(/^0(\{[\s\S]*?\})/);
+    if (m) info.sid = (JSON.parse(m[1]) as { sid?: string }).sid ?? '';
+  } catch (e) {
+    info.pollBody = 'FETCH ERROR: ' + (e as Error).message;
+  }
+
+  if (!info.sid) return info as ScryptedDebugInfo;
+
+  const wsMessages: string[] = [];
+  await new Promise<void>((resolve) => {
+    const wsUrl = baseUrl.replace(/^https?/, m => m === 'https' ? 'wss' : 'ws') +
+      `/endpoint/@scrypted/core/engine.io/api/?EIO=4&transport=websocket&sid=${encodeURIComponent(info.sid as string)}&scryptedToken=${encodeURIComponent(token)}`;
+    const ws = new WebSocket(wsUrl, { rejectUnauthorized: false });
+    const timer = setTimeout(() => { ws.terminate(); resolve(); }, 6000);
+
+    ws.once('open', () => { wsMessages.push('OPEN'); ws.send('2probe'); wsMessages.push('SENT:2probe'); });
+    ws.on('message', (raw: Buffer) => {
+      const s = raw.toString();
+      wsMessages.push('RECV:' + s.slice(0, 300));
+      if (s === '3probe') { ws.send('5'); wsMessages.push('SENT:5'); }
+      else if (s[0] === '2') { ws.send('3'); wsMessages.push('SENT:3'); }
+    });
+    ws.on('error', (e) => { info.wsError = e.message; clearTimeout(timer); resolve(); });
+    ws.on('close', (code: number, reason: Buffer) => {
+      info.wsCloseCode = code;
+      info.wsCloseReason = reason?.toString() || '';
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+
+  info.wsMessages = wsMessages;
+  return info as ScryptedDebugInfo;
+}
+
+// ── Rebroadcast scan (fallback when RPC fails) ────────────────────────────────
+
 async function getScryptedCamerasViaScan(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
   const { default: fetch } = await import('node-fetch');
 
@@ -66,7 +147,6 @@ async function getScryptedCamerasViaScan(baseUrl: string, token: string): Promis
       const r = await fetch(url, { method: 'HEAD', agent: _tlsAgent, signal: ac.signal } as Parameters<typeof fetch>[1]);
       clearTimeout(t);
       if (r.status !== 200) return null;
-      // Try to get device name via REST
       let name = `Camera #${id}`;
       try {
         const nr = await fetch(`${baseUrl}/device/${id}?scryptedToken=${encodeURIComponent(token)}`, { agent: _tlsAgent } as Parameters<typeof fetch>[1]);
@@ -85,7 +165,6 @@ async function getScryptedCamerasViaScan(baseUrl: string, token: string): Promis
 async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
   const { default: fetch } = await import('node-fetch');
 
-  // Step 1: Polling GET to obtain a session ID
   const apiBase = `${baseUrl}/endpoint/@scrypted/core/engine.io/api/`;
   const pollRes = await fetch(
     `${apiBase}?EIO=4&transport=polling&scryptedToken=${encodeURIComponent(token)}`,
@@ -94,19 +173,20 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
   if (!pollRes.ok) throw new Error(`Scrypted polling failed: ${pollRes.status}`);
 
   const pollBody = await pollRes.text();
-  // engine.io v4: plain packet "0{...}" | engine.io v3: "LENGTH:0{...}"
-  const stripped = pollBody.replace(/^\d+:/, ''); // strip v3 framing if present
-  const openMatch = stripped.match(/^0(\{[\s\S]*\})/);
+  console.log('[Scrypted] Polling response:', pollBody.slice(0, 200));
+  const stripped = pollBody.replace(/^\d+:/, '');
+  const openMatch = stripped.match(/^0(\{[\s\S]*?\})/);
   if (!openMatch) throw new Error(`No OPEN packet in polling response: ${pollBody.slice(0, 120)}`);
   const openData = JSON.parse(openMatch[1]) as { sid: string };
   if (!openData.sid) throw new Error('No sid in Scrypted OPEN packet');
   const sid = openData.sid;
+  console.log('[Scrypted] Session ID:', sid);
 
-  // Step 2: WebSocket upgrade with the session ID
   return new Promise((resolve, reject) => {
     const wsUrl =
       baseUrl.replace(/^https?/, m => m === 'https' ? 'wss' : 'ws') +
       `/endpoint/@scrypted/core/engine.io/api/?EIO=4&transport=websocket&sid=${encodeURIComponent(sid)}&scryptedToken=${encodeURIComponent(token)}`;
+    console.log('[Scrypted] WS URL:', wsUrl.replace(/scryptedToken=[^&]+/, 'scryptedToken=…'));
 
     const ws = new WebSocket(wsUrl, { rejectUnauthorized: false });
     const deadline = setTimeout(() => { ws.terminate(); reject(new Error('RPC timeout after 30s')); }, 30_000);
@@ -124,7 +204,9 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
     proxies.set('__io__', {
       setSystemState: (raw: unknown) => {
         try {
+          console.log('[Scrypted] setSystemState called, raw keys:', Object.keys(raw as object).length);
           const cameras = parseSystemState(raw as Record<string, Record<string, { value?: unknown }>>);
+          console.log('[Scrypted] cameras after parse:', cameras.length);
           done(cameras);
         } catch (e) { reject(e); }
       },
@@ -135,16 +217,15 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
 
     function send(msg: object) { ws.send('4' + JSON.stringify(msg)); }
 
-    // Send upgrade probe once socket opens
-    ws.once('open', () => { ws.send('2probe'); });
+    ws.once('open', () => { console.log('[Scrypted] WS open'); ws.send('2probe'); });
 
     ws.on('message', async (raw: Buffer) => {
       const str = raw.toString();
+      if (str.length < 300) console.log('[Scrypted] MSG:', str);
 
-      // engine.io upgrade handshake
       if (str === '3probe' && !upgraded) { ws.send('5'); upgraded = true; return; }
-      if (str[0] === '2') { ws.send('3'); return; }   // server ping → pong
-      if (str[0] !== '4') return;                      // ignore non-MESSAGE packets
+      if (str[0] === '2') { ws.send('3'); return; }
+      if (str[0] !== '4') return;
 
       let msg: Record<string, unknown>;
       try { msg = JSON.parse(str.slice(1)) as Record<string, unknown>; } catch { return; }
@@ -172,8 +253,9 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
       }
     });
 
-    ws.on('error', e => { clearTimeout(deadline); reject(e); });
+    ws.on('error', e => { console.error('[Scrypted] WS error:', e.message); clearTimeout(deadline); reject(e); });
     ws.on('close', (code: number, reason: Buffer) => {
+      console.log('[Scrypted] WS closed code:', code, 'reason:', reason?.toString());
       if (!resolved) {
         clearTimeout(deadline);
         reject(new Error(`WS closed before system state (code:${code} reason:${reason?.toString() || 'none'})`));

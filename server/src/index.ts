@@ -12,7 +12,7 @@ import { validateUserLogin, signToken, hashPassword, verifyToken } from './auth.
 import { setupWsProxy } from './ws-proxy.js';
 import { isConfigured, loadConfig, saveConfig, getConfig, DATA_DIR } from './config.js';
 import { getLayout, saveLayout, loadLayout, DEFAULT_LAYOUT, type LayoutConfig } from './layout.js';
-import { getScryptedCameras, getScryptedToken, invalidateScryptedCache } from './scrypted.js';
+import { getScryptedCameras, getScryptedToken, invalidateScryptedCache, debugScryptedConnection } from './scrypted.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
@@ -78,7 +78,11 @@ app.get('/api/setup-status', (_req, res) => {
 
 app.get('/api/config', (_req, res) => {
   const config = getConfig();
-  res.json({ name: config?.dashboardName ?? 'Safrani Home', configured: isConfigured() });
+  res.json({
+    name: config?.dashboardName ?? 'Safrani Home',
+    configured: isConfigured(),
+    scryptedConfigured: !!(config?.scryptedUrl && config.scryptedUsername && config.scryptedPassword),
+  });
 });
 
 app.post('/api/test-ha', async (req, res) => {
@@ -583,6 +587,22 @@ app.get('/api/camera/:entityId/scrypted-stream', async (req, res) => {
   } catch (e) {
     console.error('[Scrypted stream]', (e as Error).message);
     return res.status(502).json({ error: (e as Error).message });
+  }
+});
+
+// Admin: raw debug info — shows exactly what Scrypted returns
+app.get('/api/scrypted/debug', async (req, res) => {
+  const payload = authToken(req);
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const config = getConfig();
+  if (!config?.scryptedUrl || !config.scryptedUsername || !config.scryptedPassword) {
+    return res.status(503).json({ error: 'Scrypted not configured' });
+  }
+  try {
+    const info = await debugScryptedConnection(config.scryptedUrl, config.scryptedUsername, config.scryptedPassword);
+    res.json(info);
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
   }
 });
 
