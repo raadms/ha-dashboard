@@ -121,13 +121,16 @@ export async function debugScryptedConnection(baseUrl: string, username: string,
       ws.send(s);
     }
 
-    // Minimal proxies: getRemote returns __io__, __io__ implements setSystemState
+    const dbgIoId = Math.random().toString(36).slice(2, 10);
+    const dbgGrId = Math.random().toString(36).slice(2, 10);
+    const dbgIoProxyProps = ['setSystemState', 'notify', 'ioEvent', 'getMediaManager', 'setNativeId'];
+
     const proxies = new Map<string, unknown>([
-      ['__getRemote__', async (...args: unknown[]) => {
+      [dbgGrId, async (...args: unknown[]) => {
         wsMessages.push('INFO:getRemote called, args=' + JSON.stringify(args).slice(0, 200));
-        return { __type: 'Object', id: '__io__' };
+        return { __type: 'Object', id: dbgIoId, __proxyProps: dbgIoProxyProps };
       }],
-      ['__io__', {
+      [dbgIoId, {
         setSystemState: (state: unknown) => {
           wsMessages.push('INFO:setSystemState called, keys=' + Object.keys(state as object).length);
           return null;
@@ -146,8 +149,12 @@ export async function debugScryptedConnection(baseUrl: string, username: string,
       let msg: Record<string, unknown>;
       try { msg = JSON.parse(s.slice(1)) as Record<string, unknown>; } catch { return; }
       if (msg.type === 'param') {
-        const pid = msg.param === 'getRemote' ? '__getRemote__' : '__io__';
-        rpcSend({ id: msg.id, type: 'result', result: { __type: 'Object', id: pid } });
+        if (msg.param === 'getRemote') {
+          // Same fix as RPC: return IO proxy directly with proxyProps
+          rpcSend({ id: msg.id, type: 'result', result: { __type: 'Object', id: dbgIoId, __proxyProps: dbgIoProxyProps } });
+        } else {
+          rpcSend({ id: msg.id, type: 'result', result: { __type: 'Object', id: dbgIoId } });
+        }
       } else if (msg.type === 'apply') {
         const proxy = proxies.get(msg.proxyId as string);
         if (!proxy) { rpcSend({ id: msg.id, type: 'result', result: null }); return; }
@@ -269,6 +276,10 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
     const ws = new WebSocket(wsUrl, { rejectUnauthorized: false });
     const deadline = setTimeout(() => { ws.terminate(); reject(new Error('RPC timeout after 30s')); }, 30_000);
 
+    // Use random proxy IDs (Scrypted-style: short alphanumeric)
+    const ioId = Math.random().toString(36).slice(2, 10);
+    const grId  = Math.random().toString(36).slice(2, 10);
+
     const proxies = new Map<string, object | ((...a: unknown[]) => unknown)>();
     let resolved = false;
     let upgraded = false;
@@ -279,7 +290,7 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
       resolve(cameras);
     }
 
-    proxies.set('__io__', {
+    const ioProxy = {
       setSystemState: (raw: unknown) => {
         try {
           console.log('[Scrypted] setSystemState called, raw keys:', Object.keys(raw as object).length);
@@ -287,11 +298,16 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
           console.log('[Scrypted] cameras after parse:', cameras.length);
           done(cameras);
         } catch (e) { reject(e); }
+        return null;
       },
       notify: () => null, ioEvent: () => null, getMediaManager: () => null, setNativeId: () => null,
-    });
+    };
 
-    proxies.set('__getRemote__', async () => ({ __type: 'Object', id: '__io__' }));
+    proxies.set(ioId, ioProxy);
+    // getRemote wrapper: server may call this first, we return the IO proxy
+    proxies.set(grId, async (..._args: unknown[]) => ({ __type: 'Object', id: ioId, __proxyProps: _ioProxyProps }));
+
+    const _ioProxyProps = ['setSystemState', 'notify', 'ioEvent', 'getMediaManager', 'setNativeId'];
 
     function send(msg: object) { ws.send('4' + JSON.stringify(msg)); }
 
@@ -309,8 +325,12 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
       try { msg = JSON.parse(str.slice(1)) as Record<string, unknown>; } catch { return; }
 
       if (msg.type === 'param') {
-        const id = msg.param === 'getRemote' ? '__getRemote__' : '__io__';
-        send({ id: msg.id, type: 'result', result: { __type: 'Object', id } });
+        if (msg.param === 'getRemote') {
+          // Try approach A: return IO proxy directly (with method list so server knows what's available)
+          send({ id: msg.id, type: 'result', result: { __type: 'Object', id: ioId, __proxyProps: _ioProxyProps } });
+        } else {
+          send({ id: msg.id, type: 'result', result: { __type: 'Object', id: ioId } });
+        }
       } else if (msg.type === 'apply') {
         const proxyId = msg.proxyId as string;
         const method = msg.method as string | undefined;
@@ -322,7 +342,7 @@ async function getScryptedCamerasViaRpc(baseUrl: string, token: string): Promise
           if (method && typeof (proxy as Record<string, unknown>)[method] === 'function') {
             result = await ((proxy as Record<string, unknown>)[method] as (...a: unknown[]) => unknown)(...args);
           } else if (typeof proxy === 'function') {
-            result = await proxy(...args);
+            result = await (proxy as (...a: unknown[]) => unknown)(...args);
           }
           send({ id: msg.id, type: 'result', result: result ?? null });
         } catch (e) {
