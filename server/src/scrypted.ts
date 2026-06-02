@@ -40,9 +40,44 @@ export async function getScryptedToken(baseUrl: string, username: string, passwo
 export async function getScryptedCameras(baseUrl: string, username: string, password: string): Promise<ScryptedDevice[]> {
   if (_systemState && Date.now() < _stateExpiry) return _systemState;
   const token = await getScryptedToken(baseUrl, username, password);
-  const cameras = await getScryptedCamerasViaRpc(baseUrl, token);
+
+  let cameras: ScryptedDevice[] = [];
+  try {
+    cameras = await getScryptedCamerasViaRpc(baseUrl, token);
+  } catch {
+    // RPC failed (limited user or protocol mismatch) — scan rebroadcast endpoints
+    cameras = await getScryptedCamerasViaScan(baseUrl, token);
+  }
+
   _systemState = cameras; _stateExpiry = Date.now() + 10 * 60_000;
   return cameras;
+}
+
+// Scan /endpoint/@scrypted/rebroadcast/public/{id}/stream.m3u8 for IDs 1–60
+// Returns any device IDs that have an active HLS stream (no RPC required)
+async function getScryptedCamerasViaScan(baseUrl: string, token: string): Promise<ScryptedDevice[]> {
+  const { default: fetch } = await import('node-fetch');
+
+  const check = async (id: number): Promise<ScryptedDevice | null> => {
+    try {
+      const ac = new AbortController();
+      const t = setTimeout(() => ac.abort(), 5000);
+      const url = `${baseUrl}/endpoint/@scrypted/rebroadcast/public/${id}/stream.m3u8?scryptedToken=${encodeURIComponent(token)}`;
+      const r = await fetch(url, { method: 'HEAD', agent: _tlsAgent, signal: ac.signal } as Parameters<typeof fetch>[1]);
+      clearTimeout(t);
+      if (r.status !== 200) return null;
+      // Try to get device name via REST
+      let name = `Camera #${id}`;
+      try {
+        const nr = await fetch(`${baseUrl}/device/${id}?scryptedToken=${encodeURIComponent(token)}`, { agent: _tlsAgent } as Parameters<typeof fetch>[1]);
+        if (nr.ok) { const d = await nr.json() as { name?: string }; if (d.name) name = d.name; }
+      } catch {}
+      return { id: String(id), name, interfaces: ['VideoCamera'] };
+    } catch { return null; }
+  };
+
+  const results = await Promise.allSettled(Array.from({ length: 60 }, (_, i) => check(i + 1)));
+  return results.map(r => r.status === 'fulfilled' ? r.value : null).filter((v): v is ScryptedDevice => v !== null);
 }
 
 // ── Raw engine.io RPC ─────────────────────────────────────────────────────────
