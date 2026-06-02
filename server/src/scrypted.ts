@@ -112,14 +112,59 @@ export async function debugScryptedConnection(baseUrl: string, username: string,
     const wsUrl = baseUrl.replace(/^https?/, m => m === 'https' ? 'wss' : 'ws') +
       `/endpoint/@scrypted/core/engine.io/api/?EIO=4&transport=websocket&sid=${encodeURIComponent(info.sid as string)}&scryptedToken=${encodeURIComponent(token)}`;
     const ws = new WebSocket(wsUrl, { rejectUnauthorized: false });
-    const timer = setTimeout(() => { ws.terminate(); resolve(); }, 6000);
+    const timer = setTimeout(() => { ws.terminate(); resolve(); }, 12000);
+    let upgraded = false;
+
+    function rpcSend(msg: object) {
+      const s = '4' + JSON.stringify(msg);
+      wsMessages.push('SENT:' + s.slice(0, 300));
+      ws.send(s);
+    }
+
+    // Minimal proxies: getRemote returns __io__, __io__ implements setSystemState
+    const proxies = new Map<string, unknown>([
+      ['__getRemote__', async (...args: unknown[]) => {
+        wsMessages.push('INFO:getRemote called, args=' + JSON.stringify(args).slice(0, 200));
+        return { __type: 'Object', id: '__io__' };
+      }],
+      ['__io__', {
+        setSystemState: (state: unknown) => {
+          wsMessages.push('INFO:setSystemState called, keys=' + Object.keys(state as object).length);
+          return null;
+        },
+        notify: () => null, ioEvent: () => null, getMediaManager: () => null, setNativeId: () => null,
+      }],
+    ]);
 
     ws.once('open', () => { wsMessages.push('OPEN'); ws.send('2probe'); wsMessages.push('SENT:2probe'); });
-    ws.on('message', (raw: Buffer) => {
+    ws.on('message', async (raw: Buffer) => {
       const s = raw.toString();
-      wsMessages.push('RECV:' + s.slice(0, 300));
-      if (s === '3probe') { ws.send('5'); wsMessages.push('SENT:5'); }
-      else if (s[0] === '2') { ws.send('3'); wsMessages.push('SENT:3'); }
+      wsMessages.push('RECV:' + s.slice(0, 400));
+      if (s === '3probe' && !upgraded) { upgraded = true; ws.send('5'); wsMessages.push('SENT:5'); return; }
+      if (s[0] === '2') { ws.send('3'); wsMessages.push('SENT:3'); return; }
+      if (s[0] !== '4') return;
+      let msg: Record<string, unknown>;
+      try { msg = JSON.parse(s.slice(1)) as Record<string, unknown>; } catch { return; }
+      if (msg.type === 'param') {
+        const pid = msg.param === 'getRemote' ? '__getRemote__' : '__io__';
+        rpcSend({ id: msg.id, type: 'result', result: { __type: 'Object', id: pid } });
+      } else if (msg.type === 'apply') {
+        const proxy = proxies.get(msg.proxyId as string);
+        if (!proxy) { rpcSend({ id: msg.id, type: 'result', result: null }); return; }
+        const method = msg.method as string | undefined;
+        const args = (msg.args as unknown[]) ?? [];
+        try {
+          let result: unknown;
+          if (method && typeof (proxy as Record<string, unknown>)[method] === 'function') {
+            result = await ((proxy as Record<string, unknown>)[method] as (...a: unknown[]) => unknown)(...args);
+          } else if (typeof proxy === 'function') {
+            result = await (proxy as (...a: unknown[]) => unknown)(...args);
+          }
+          rpcSend({ id: msg.id, type: 'result', result: result ?? null });
+        } catch (e) {
+          rpcSend({ id: msg.id, type: 'result', result: (e as Error).message, throw: true });
+        }
+      }
     });
     ws.on('error', (e) => { info.wsError = e.message; clearTimeout(timer); resolve(); });
     ws.on('close', (code: number, reason: Buffer) => {
