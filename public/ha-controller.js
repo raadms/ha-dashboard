@@ -1014,16 +1014,17 @@ function _camMjpegFallback(popup, entity, tk) {
   window._camStillInt = setInterval(load, 3000);
 }
 
-async function _tryScryptedFallback(popup, entity, tk) {
+async function _tryScryptedStream(popup, entity, tk) {
+  const video = document.getElementById('cam-video');
+  const msg   = document.getElementById('cam-msg');
   try {
     const r = await fetch(`/api/camera/${entity}/scrypted-stream`, { headers: { Authorization: `Bearer ${tk}` } });
     const data = await r.json();
     if (data.error || !data.url) throw new Error(data.error ?? 'no url');
-    // Reuse HLS playback logic
-    const video = document.getElementById('cam-video');
-    const msg   = document.getElementById('cam-msg');
+
     if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: false });
+      // Chrome, Firefox, Android
+      const hls = new Hls({ enableWorker: false, lowLatencyMode: true });
       popup._hls = hls;
       hls.loadSource(data.url);
       hls.attachMedia(video);
@@ -1036,9 +1037,11 @@ async function _tryScryptedFallback(popup, entity, tk) {
         if (d.fatal) { hls.destroy(); popup._hls = null; _tryHlsFallback(popup, entity, tk); }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari / iOS / iPadOS — native HLS with audio
       video.src = data.url;
-      video.style.display = 'block';
+      video.load();
       if (msg) msg.style.display = 'none';
+      video.style.display = 'block';
       video.play().catch(() => {});
     } else {
       throw new Error('HLS not supported');
@@ -1086,6 +1089,17 @@ async function _tryHlsFallback(popup, entity, tk) {
 window.openCamStream = async function(entity, label) {
   const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
   const popup = _camPopupShell(label, entity);
+  const msg = document.getElementById('cam-msg');
+  if (msg) msg.textContent = '⏳ Loading live stream…';
+  // Go straight to Scrypted HLS — live video + audio, no WebRTC timeout delay
+  // Falls back: Scrypted HLS → HA HLS → snapshot refresh
+  _tryScryptedStream(popup, entity, tk);
+};
+
+// kept for any legacy call sites
+window._openCamStream_webrtc = async function(entity, label) {
+  const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
+  const popup = _camPopupShell(label, entity);
   const video = document.getElementById('cam-video');
   const msg   = document.getElementById('cam-msg');
 
@@ -1104,7 +1118,6 @@ window.openCamStream = async function(entity, label) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Gather ICE candidates (up to 5 s)
     await new Promise(resolve => {
       if (pc.iceGatheringState === 'complete') return resolve(null);
       pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(null); };
@@ -1121,11 +1134,10 @@ window.openCamStream = async function(entity, label) {
 
     await pc.setRemoteDescription({ type: 'answer', sdp: data.answer });
 
-    // If no video track arrives in 10 s, try Scrypted HLS → HA HLS → snapshots
     const fallbackTimer = setTimeout(() => {
       if (video && video.style.display === 'none') {
         pc.close(); popup._pc = null;
-        _tryScryptedFallback(popup, entity, tk);
+        _tryScryptedStream(popup, entity, tk);
       }
     }, 10_000);
 
@@ -1143,12 +1155,12 @@ window.openCamStream = async function(entity, label) {
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         clearTimeout(fallbackTimer);
-        _tryScryptedFallback(popup, entity, tk);
+        _tryScryptedStream(popup, entity, tk);
       }
     };
 
   } catch {
-    _tryScryptedFallback(popup, entity, tk);
+    _tryScryptedStream(popup, entity, tk);
   }
 };
 
