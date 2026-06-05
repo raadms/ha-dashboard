@@ -1018,12 +1018,12 @@ async function _tryScryptedStream(popup, entity, tk) {
   const video = document.getElementById('cam-video');
   const msg   = document.getElementById('cam-msg');
   try {
+    if (msg) msg.textContent = '⏳ Loading live stream…';
     const r = await fetch(`/api/camera/${entity}/scrypted-stream`, { headers: { Authorization: `Bearer ${tk}` } });
     const data = await r.json();
-    if (data.error || !data.url) throw new Error(data.error ?? 'no url');
+    if (data.error || !data.url) throw new Error(data.error ?? 'no stream URL');
 
     if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      // Chrome, Firefox, Android
       const hls = new Hls({ enableWorker: false, lowLatencyMode: true });
       popup._hls = hls;
       hls.loadSource(data.url);
@@ -1034,20 +1034,53 @@ async function _tryScryptedStream(popup, entity, tk) {
         video.play().catch(() => {});
       });
       hls.on(Hls.Events.ERROR, (_e, d) => {
-        if (d.fatal) { hls.destroy(); popup._hls = null; _tryHlsFallback(popup, entity, tk); }
+        if (d.fatal) {
+          hls.destroy(); popup._hls = null;
+          _showStreamError(popup, `HLS error: ${d.details}`, entity, tk);
+        }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari / iOS / iPadOS — native HLS with audio
+      // Safari / iPadOS — native HLS with audio
       video.src = data.url;
       video.load();
+      video.onerror = () => _showStreamError(popup, 'Safari could not load the HLS stream', entity, tk);
       if (msg) msg.style.display = 'none';
       video.style.display = 'block';
       video.play().catch(() => {});
     } else {
-      throw new Error('HLS not supported');
+      throw new Error('HLS not supported in this browser');
     }
-  } catch {
-    _tryHlsFallback(popup, entity, tk);
+  } catch(err) {
+    console.error('[cam] Scrypted stream failed:', err.message);
+    _showStreamError(popup, String(err.message), entity, tk);
+  }
+}
+
+function _showStreamError(popup, reason, entity, tk) {
+  const video = document.getElementById('cam-video');
+  const msg   = document.getElementById('cam-msg');
+  if (video) { video.style.display = 'none'; video.src = ''; }
+  if (popup._hls) { popup._hls.destroy(); popup._hls = null; }
+  if (msg) {
+    msg.style.display = 'block';
+    msg.innerHTML = `
+      <div style="color:#f87171;font-size:14px;margin-bottom:8px">⚠️ Live stream unavailable</div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:18px;max-width:340px;margin-left:auto;margin-right:auto">${reason}</div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button id="cam-retry-btn"
+          style="background:rgba(91,141,238,.18);border:1px solid rgba(91,141,238,.4);color:#93c5fd;border-radius:8px;padding:9px 18px;font-size:12px;cursor:pointer;font-family:inherit">
+          ↺ Retry
+        </button>
+        <button id="cam-snap-btn"
+          style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#94a3b8;border-radius:8px;padding:9px 18px;font-size:12px;cursor:pointer;font-family:inherit">
+          📷 Snapshot
+        </button>
+      </div>`;
+    document.getElementById('cam-retry-btn')?.addEventListener('click', () => {
+      msg.textContent = '⏳ Retrying…';
+      _tryScryptedStream(popup, entity, tk);
+    });
+    document.getElementById('cam-snap-btn')?.addEventListener('click', () => _camMjpegFallback(popup, entity, tk));
   }
 }
 
@@ -1065,7 +1098,7 @@ async function _tryHlsFallback(popup, entity, tk) {
       hls.loadSource(data.url);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        msg.style.display = 'none';
+        if (msg) msg.style.display = 'none';
         video.style.display = 'block';
         video.play().catch(() => {});
       });
@@ -1073,10 +1106,9 @@ async function _tryHlsFallback(popup, entity, tk) {
         if (d.fatal) { hls.destroy(); popup._hls = null; _camMjpegFallback(popup, entity, tk); }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari native HLS
       video.src = data.url;
       video.style.display = 'block';
-      msg.style.display = 'none';
+      if (msg) msg.style.display = 'none';
       video.play().catch(() => {});
     } else {
       throw new Error('HLS not supported');

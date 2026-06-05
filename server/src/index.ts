@@ -409,11 +409,14 @@ app.get('/api/camera/:entityId/stream', async (req, res) => {
   }
 });
 
-app.get('/api/hls/:sid/:file', async (req, res) => {
+// Wildcard route captures full subpath (e.g. stream/index.m3u8 or chunk.ts)
+app.get('/api/hls/:sid/*', async (req, res) => {
   const payload = authToken(req);
   if (!payload) return res.status(401).send('Unauthorized');
-  const { sid, file } = req.params;
-  if (!/^[a-z0-9]+$/.test(sid) || !/^[\w.\-]+$/.test(file)) return res.status(400).send('Invalid');
+  const { sid } = req.params;
+  // Express wildcard stored at key '0'
+  const file = (req.params as Record<string, string>)['0'] ?? '';
+  if (!/^[a-z0-9]+$/.test(sid) || !file || /\.\./.test(file)) return res.status(400).send('Invalid');
   const session = hlsSessions.get(sid);
   if (!session || session.expires < Date.now()) return res.status(404).send('Stream expired');
   const config = getConfig();
@@ -433,16 +436,28 @@ app.get('/api/hls/:sid/:file', async (req, res) => {
     const fetchOpts: Record<string, unknown> = { headers };
     if (session.kind === 'scrypted') fetchOpts.agent = _tlsAgent;
     const r = await fetch(upstreamUrl, fetchOpts as Parameters<typeof fetch>[1]);
-    if (!r.ok) return res.status(r.status).send('Upstream error');
+    if (!r.ok) return res.status(r.status).send(`Upstream error ${r.status}`);
     const ct = r.headers.get('content-type') ?? 'application/octet-stream';
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (ct.includes('mpegurl') || file.endsWith('.m3u8')) {
       const text = await r.text();
+      // Resolve segment URLs relative to the M3U8 file's directory so subpaths are preserved
+      const m3u8Dir = file.includes('/') ? file.substring(0, file.lastIndexOf('/') + 1) : '';
       const rewritten = text.replace(/^([^#\n][^\n]*)$/gm, (line) => {
-        const fname = line.split('?')[0].split('/').pop() ?? line;
-        return `/api/hls/${sid}/${fname}?token=${encodeURIComponent(token)}`;
+        const trimmed = line.trim();
+        if (!trimmed) return line;
+        const segRaw = trimmed.split('?')[0];
+        let segPath: string;
+        if (segRaw.startsWith('http://') || segRaw.startsWith('https://')) {
+          segPath = segRaw.split('/').pop() ?? segRaw; // absolute URL: keep filename only
+        } else if (segRaw.startsWith('/')) {
+          segPath = segRaw.slice(1); // absolute path: strip leading slash
+        } else {
+          segPath = m3u8Dir + segRaw; // relative: resolve against M3U8 directory
+        }
+        return `/api/hls/${sid}/${segPath}?token=${encodeURIComponent(token)}`;
       });
       res.send(rewritten);
     } else { r.body?.pipe(res); }
