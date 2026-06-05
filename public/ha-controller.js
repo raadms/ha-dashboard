@@ -1020,6 +1020,7 @@ async function _tryScryptedStream(popup, entity, tk) {
   try {
     if (msg) msg.textContent = '⏳ Loading live stream…';
     const r = await fetch(`/api/camera/${entity}/scrypted-stream`, { headers: { Authorization: `Bearer ${tk}` } });
+    if (!r.ok) { _tryHlsFallback(popup, entity, tk); return; }
     const data = await r.json();
     if (data.error || !data.url) throw new Error(data.error ?? 'no stream URL');
 
@@ -1036,14 +1037,14 @@ async function _tryScryptedStream(popup, entity, tk) {
       hls.on(Hls.Events.ERROR, (_e, d) => {
         if (d.fatal) {
           hls.destroy(); popup._hls = null;
-          _showStreamError(popup, `HLS error: ${d.details}`, entity, tk);
+          _tryHlsFallback(popup, entity, tk);
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari / iPadOS — native HLS with audio
       video.src = data.url;
       video.load();
-      video.onerror = () => _showStreamError(popup, 'Safari could not load the HLS stream', entity, tk);
+      video.onerror = () => _tryHlsFallback(popup, entity, tk);
       if (msg) msg.style.display = 'none';
       video.style.display = 'block';
       video.play().catch(() => {});
@@ -1051,8 +1052,8 @@ async function _tryScryptedStream(popup, entity, tk) {
       throw new Error('HLS not supported in this browser');
     }
   } catch(err) {
-    console.error('[cam] Scrypted stream failed:', err.message);
-    _showStreamError(popup, String(err.message), entity, tk);
+    console.error('[cam] Scrypted stream failed, trying HA HLS:', err.message);
+    _tryHlsFallback(popup, entity, tk);
   }
 }
 
@@ -1087,6 +1088,7 @@ function _showStreamError(popup, reason, entity, tk) {
 async function _tryHlsFallback(popup, entity, tk) {
   const video = document.getElementById('cam-video');
   const msg   = document.getElementById('cam-msg');
+  if (msg) msg.textContent = '⏳ Trying HA stream…';
   try {
     const r = await fetch(`/api/camera/${entity}/stream`, { headers: { Authorization: `Bearer ${tk}` } });
     const data = await r.json();
@@ -1103,18 +1105,19 @@ async function _tryHlsFallback(popup, entity, tk) {
         video.play().catch(() => {});
       });
       hls.on(Hls.Events.ERROR, (_e, d) => {
-        if (d.fatal) { hls.destroy(); popup._hls = null; _camMjpegFallback(popup, entity, tk); }
+        if (d.fatal) { hls.destroy(); popup._hls = null; _showStreamError(popup, `HA HLS error: ${d.details}`, entity, tk); }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = data.url;
       video.style.display = 'block';
       if (msg) msg.style.display = 'none';
+      video.onerror = () => _showStreamError(popup, 'HA stream failed', entity, tk);
       video.play().catch(() => {});
     } else {
       throw new Error('HLS not supported');
     }
-  } catch {
-    _camMjpegFallback(popup, entity, tk);
+  } catch(err) {
+    _showStreamError(popup, 'Stream unavailable: ' + err.message, entity, tk);
   }
 }
 
