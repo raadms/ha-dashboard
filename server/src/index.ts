@@ -436,7 +436,12 @@ app.get('/api/hls/:sid/*', async (req, res) => {
     const fetchOpts: Record<string, unknown> = { headers };
     if (session.kind === 'scrypted') fetchOpts.agent = _tlsAgent;
     const r = await fetch(upstreamUrl, fetchOpts as Parameters<typeof fetch>[1]);
-    if (!r.ok) return res.status(r.status).send(`Upstream error ${r.status}`);
+    if (!r.ok) {
+      const errSnippet = await r.text().then(t => t.slice(0, 300)).catch(() => '');
+      const safeUrl = upstreamUrl.replace(/scryptedToken=[^&\s]+/, 'scryptedToken=…');
+      console.error(`[HLS proxy] Upstream ${r.status} for ${safeUrl} — ${errSnippet}`);
+      return res.status(r.status).send(`Upstream error ${r.status}`);
+    }
     const ct = r.headers.get('content-type') ?? 'application/octet-stream';
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'no-cache');
@@ -633,6 +638,37 @@ app.get('/api/scrypted/scan', async (req, res) => {
     const token = await getScryptedToken(config.scryptedUrl, config.scryptedUsername, config.scryptedPassword);
     const results = await scanScryptedRebroadcast(config.scryptedUrl, token, 200);
     res.json(results);
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
+
+// Admin: directly test a Scrypted rebroadcast URL — returns HTTP status + body snippet
+app.get('/api/scrypted/stream-test', async (req, res) => {
+  const payload = authToken(req);
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const config = getConfig();
+  if (!config?.scryptedUrl || !config.scryptedUsername || !config.scryptedPassword) {
+    return res.status(503).json({ error: 'Scrypted not configured' });
+  }
+  const deviceId = (req.query.deviceId as string) ?? '';
+  if (!deviceId || !/^[0-9]+$/.test(deviceId)) {
+    return res.status(400).json({ error: 'deviceId query param required (numeric)' });
+  }
+  try {
+    const { default: fetch } = await import('node-fetch');
+    const token = await getScryptedToken(config.scryptedUrl, config.scryptedUsername, config.scryptedPassword);
+    const url = `${config.scryptedUrl}/endpoint/@scrypted/rebroadcast/public/${deviceId}/stream.m3u8?scryptedToken=${encodeURIComponent(token)}`;
+    const r = await fetch(url, { agent: _tlsAgent } as Parameters<typeof fetch>[1]);
+    const body = await r.text();
+    res.json({
+      deviceId,
+      testedUrl: url.replace(/scryptedToken=[^&\s]+/, 'scryptedToken=…'),
+      status: r.status,
+      ok: r.ok,
+      contentType: r.headers.get('content-type') ?? '',
+      body: body.slice(0, 800),
+    });
   } catch (e) {
     res.status(502).json({ error: (e as Error).message });
   }

@@ -681,15 +681,27 @@ textarea{resize:vertical;min-height:60px;font-size:12px;font-family:'SF Mono',Mo
     <div class="field"><label>Label</label><input id="cam-label" placeholder="Front Door"/></div>
     <div class="field"><label>HA Entity ID</label><input id="cam-ent" placeholder="camera.front_door"/></div>
     <div class="field">
-      <label>Live Stream URL <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— Scrypted or any HLS URL (optional)</span></label>
-      <input id="cam-stream-url" placeholder="https://scrypted.domain/stream.m3u8"/>
-    </div>
-    <div class="field">
       <label>Stream Type</label>
-      <select id="cam-stream-type">
+      <select id="cam-stream-type" onchange="toggleCamStreamFields()">
         <option value="ha">Via HA proxy (default)</option>
-        <option value="hls">Direct HLS URL (Scrypted)</option>
+        <option value="hls">Direct HLS URL (Scrypted rebroadcast)</option>
       </select>
+    </div>
+    <div id="cam-scrypted-section" style="display:none">
+      <div class="field">
+        <label>Scrypted Device ID <span style="font-weight:400;text-transform:none;color:var(--muted);font-size:11px">— number from Scrypted URL /#/device/<b>ID</b></span></label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="cam-scrypted-id" placeholder="e.g. 39" style="flex:1"/>
+          <button class="btn btn-s btn-sm" type="button" onclick="testCamStream()">Test</button>
+        </div>
+        <div id="cam-test-result" style="display:none;margin-top:8px;font-size:11px;padding:8px;border-radius:6px;background:rgba(0,0,0,.3);white-space:pre-wrap;word-break:break-all;line-height:1.5;max-height:160px;overflow:auto"></div>
+      </div>
+    </div>
+    <div id="cam-hls-url-section" style="display:none">
+      <div class="field">
+        <label>Direct HLS URL <span style="font-weight:400;text-transform:none;color:var(--muted);font-size:11px">— leave blank to auto-proxy via HA</span></label>
+        <input id="cam-stream-url" placeholder="https://…/stream.m3u8"/>
+      </div>
     </div>
   </div>
   <div class="mfoot">
@@ -1328,15 +1340,40 @@ function renderCameras() {
   });
 }
 
+function toggleCamStreamFields() {
+  const t = document.getElementById('cam-stream-type').value;
+  document.getElementById('cam-scrypted-section').style.display = t === 'hls' ? '' : 'none';
+  document.getElementById('cam-hls-url-section').style.display = t === 'hls' ? '' : 'none';
+  document.getElementById('cam-test-result').style.display = 'none';
+}
+
+async function testCamStream() {
+  const deviceId = document.getElementById('cam-scrypted-id').value.trim();
+  const out = document.getElementById('cam-test-result');
+  if (!deviceId) { out.textContent = 'Enter a device ID first'; out.style.display = ''; return; }
+  out.textContent = '⏳ Testing…'; out.style.display = '';
+  try {
+    const data = await api('GET', `/api/scrypted/stream-test?deviceId=${encodeURIComponent(deviceId)}`);
+    const statusIcon = data.ok ? '✅' : '❌';
+    out.textContent = `${statusIcon} HTTP ${data.status}  ${data.contentType}\n\n${data.body || '(empty response)'}`;
+    out.style.color = data.ok ? '#4ade80' : '#f87171';
+  } catch(e) {
+    out.textContent = '❌ ' + e.message;
+    out.style.color = '#f87171';
+  }
+}
+
 function openCameraModal(i) {
   _editCamIdx = i;
-  const c = i >= 0 ? L.security.cameras[i] : { label: '', entity: '', streamUrl: '', streamType: 'ha' };
+  const c = i >= 0 ? L.security.cameras[i] : { label: '', entity: '', streamUrl: '', streamType: 'ha', scryptedId: '' };
   document.getElementById('m-cam-title').textContent = i >= 0 ? 'Edit Camera' : 'Add Camera';
   document.getElementById('cam-label').value = c.label;
   document.getElementById('cam-ent').value = c.entity;
   document.getElementById('cam-stream-url').value = c.streamUrl || '';
   document.getElementById('cam-stream-type').value = c.streamType || 'ha';
+  document.getElementById('cam-scrypted-id').value = c.scryptedId || '';
   document.getElementById('cam-del-btn').style.display = i >= 0 ? '' : 'none';
+  toggleCamStreamFields();
   openM('m-camera');
 }
 
@@ -1344,12 +1381,14 @@ function saveCamera() {
   if (!L.security.cameras) L.security.cameras = [];
   const streamUrl = document.getElementById('cam-stream-url').value.trim();
   const streamType = document.getElementById('cam-stream-type').value;
+  const scryptedId = document.getElementById('cam-scrypted-id').value.trim();
   const c = {
     id: _editCamIdx >= 0 ? L.security.cameras[_editCamIdx].id : 'cam_' + Date.now().toString(36),
     label: document.getElementById('cam-label').value.trim(),
     entity: document.getElementById('cam-ent').value.trim(),
     ...(streamUrl && { streamUrl }),
     streamType,
+    ...(scryptedId && { scryptedId }),
   };
   if (!c.label || !c.entity) return;
   if (_editCamIdx >= 0) L.security.cameras[_editCamIdx] = c;
