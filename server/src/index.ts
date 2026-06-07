@@ -21,6 +21,14 @@ const PUBLIC_DIR = join(__dirname, '../../public');
 loadConfig();
 loadLayout();
 
+// ── Crash guard — prevent silent process exit on unhandled async errors ───────
+process.on('unhandledRejection', (reason) => {
+  console.error('[CRASH GUARD] Unhandled rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH GUARD] Uncaught exception:', err.message, err.stack);
+});
+
 // ── Push subscriptions ────────────────────────────────────────────────────────
 const SUBS_FILE = join(DATA_DIR, 'push_subscriptions.json');
 
@@ -398,11 +406,14 @@ app.get('/api/camera/:entityId/stream', async (req, res) => {
     // Use HA WebSocket camera/stream (works in modern HA; REST /api/camera/stream is removed)
     const streamUrl = await getHaStreamUrl(entityId);
     if (!streamUrl) return res.status(502).json({ error: 'No stream URL from HA' });
-    const haBase = streamUrl.replace(/[^/]+$/, '');
+    // HA returns e.g. '/api/hls/TOKEN/master.m3u8' — preserve the actual filename
+    const lastSlash = streamUrl.lastIndexOf('/');
+    const haFile = lastSlash >= 0 ? streamUrl.slice(lastSlash + 1) : 'master.m3u8';
+    const haBase = lastSlash >= 0 ? streamUrl.slice(0, lastSlash + 1) : streamUrl + '/';
     const sid = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     hlsSessions.set(sid, { kind: 'ha', haBase, expires: Date.now() + 7_200_000 });
     setTimeout(() => hlsSessions.delete(sid), 7_200_000);
-    res.json({ url: `/api/hls/${sid}/index.m3u8?token=${encodeURIComponent(token)}`, type: 'hls-proxied' });
+    res.json({ url: `/api/hls/${sid}/${haFile}?token=${encodeURIComponent(token)}`, type: 'hls-proxied' });
   } catch (e) {
     console.error('[HLS stream]', (e as Error).message);
     res.status(502).json({ error: 'Could not create stream' });
