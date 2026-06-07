@@ -969,6 +969,8 @@ window.closeCamPopup = function() {
   if (!popup) return;
   if (popup._hls) { popup._hls.destroy(); popup._hls = null; }
   if (popup._pc)  { popup._pc.close();    popup._pc  = null; }
+  // Stop microphone tracks so the browser removes the recording indicator
+  if (popup._micStream) { popup._micStream.getTracks().forEach(t => t.stop()); popup._micStream = null; }
   const v = popup.querySelector('video');
   if (v) { v.pause(); v.srcObject = null; v.src = ''; v.load(); }
   popup.remove();
@@ -1035,6 +1037,15 @@ async function _tryWebRTC(popup, entity, tk) {
   const msg   = document.getElementById('cam-msg');
   if (msg) msg.textContent = '⏳ Connecting…';
 
+  // ── Request microphone for two-way audio (optional — stream still works without it)
+  let micStream = null;
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e) {
+    console.log('[cam] Mic not available (one-way only):', e.message);
+  }
+  popup._micStream = micStream;
+
   const pc = new RTCPeerConnection({
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
     bundlePolicy: 'max-bundle',
@@ -1042,23 +1053,39 @@ async function _tryWebRTC(popup, entity, tk) {
   });
   popup._pc = pc;
 
-  // Receive-only — no microphone/camera needed from the browser side
+  // Video: receive only
   pc.addTransceiver('video', { direction: 'recvonly' });
-  pc.addTransceiver('audio', { direction: 'recvonly' });
 
-  // When a media track arrives, attach it to the <video> element
+  if (micStream) {
+    // Two-way audio: add mic track so go2rtc routes our voice to the doorbell speaker
+    micStream.getAudioTracks().forEach(t => pc.addTrack(t, micStream));
+    // Audio transceiver is automatically sendrecv when we add a local track
+  } else {
+    // No mic permission — receive camera audio only
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+  }
+
+  // When a media track arrives, attach the stream to the <video> element
   pc.ontrack = (e) => {
     if (!e.streams?.[0]) return;
     video.srcObject = e.streams[0];
     if (msg) msg.style.display = 'none';
     video.style.display = 'block';
-    video.play().catch(() => {});
+    // iOS/Safari may block autoplay with audio — play muted first then offer unmute
+    video.muted = false;
+    video.play().catch(() => {
+      video.muted = true;
+      video.play().catch(() => {});
+      _showUnmuteBtn(popup, video);
+    });
     _setCamBadge('▶ Live  WebRTC');
+    _renderAudioControls(popup, micStream);
   };
 
   const fallback = () => {
     if (!popup._pc) return;
     popup._pc = null; pc.close();
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); popup._micStream = null; }
     _tryHlsFallback(popup, entity, tk);
   };
 
@@ -1168,6 +1195,81 @@ function _setCamBadge(text) {
   title.nextElementSibling?.classList?.contains('cam-snap-badge') && title.nextElementSibling.remove();
   title.insertAdjacentHTML('afterend',
     `<span class="cam-snap-badge" style="font-size:10px;color:#4ade80;background:rgba(74,222,128,.15);padding:3px 9px;border-radius:50px;border:1px solid rgba(74,222,128,.3);margin-left:8px;">${text}</span>`);
+}
+
+// Shows a tap-to-unmute button when autoplay with audio is blocked (iOS)
+function _showUnmuteBtn(popup, video) {
+  if (popup.querySelector('#cam-unmute-btn')) return;
+  const inner = popup.querySelector('.cam-popup-inner');
+  const btn = document.createElement('button');
+  btn.id = 'cam-unmute-btn';
+  btn.textContent = '🔊 Tap to unmute';
+  btn.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.7);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:10px 20px;font-size:13px;cursor:pointer;z-index:10;';
+  btn.onclick = () => { video.muted = false; btn.remove(); };
+  inner.style.position = 'relative';
+  inner.appendChild(btn);
+}
+
+// Renders microphone + speaker controls below the video
+function _renderAudioControls(popup, micStream) {
+  if (popup.querySelector('#cam-audio-controls')) return;
+  const inner = popup.querySelector('.cam-popup-inner');
+  const bar = document.createElement('div');
+  bar.id = 'cam-audio-controls';
+  bar.style.cssText = 'display:flex;gap:10px;justify-content:center;padding:10px 0 4px;';
+
+  // Speaker button (mute/unmute camera audio)
+  const video = popup.querySelector('#cam-video');
+  const spkBtn = document.createElement('button');
+  spkBtn.style.cssText = _audioBtnStyle();
+  spkBtn.innerHTML = '🔊 Speaker';
+  spkBtn.onclick = () => {
+    video.muted = !video.muted;
+    spkBtn.innerHTML = video.muted ? '🔇 Unmute' : '🔊 Speaker';
+    spkBtn.style.opacity = video.muted ? '0.5' : '1';
+  };
+  bar.appendChild(spkBtn);
+
+  // Mic button — only shown if we have microphone access
+  if (micStream) {
+    const micBtn = document.createElement('button');
+    micBtn.style.cssText = _audioBtnStyle();
+    micBtn.innerHTML = '🎤 Mic On';
+    let micMuted = false;
+    micBtn.onclick = () => {
+      micMuted = !micMuted;
+      micStream.getAudioTracks().forEach(t => { t.enabled = !micMuted; });
+      micBtn.innerHTML = micMuted ? '🔇 Mic Off' : '🎤 Mic On';
+      micBtn.style.opacity = micMuted ? '0.5' : '1';
+    };
+    bar.appendChild(micBtn);
+  } else {
+    // No mic — show a button to request permission
+    const askBtn = document.createElement('button');
+    askBtn.style.cssText = _audioBtnStyle();
+    askBtn.innerHTML = '🎤 Enable Mic';
+    askBtn.onclick = async () => {
+      try {
+        const ms = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        popup._micStream = ms;
+        if (popup._pc) ms.getAudioTracks().forEach(t => popup._pc.addTrack(t, ms));
+        askBtn.remove();
+        const micBtn = document.createElement('button');
+        micBtn.style.cssText = _audioBtnStyle();
+        micBtn.innerHTML = '🎤 Mic On';
+        let mm = false;
+        micBtn.onclick = () => { mm = !mm; ms.getAudioTracks().forEach(t => { t.enabled = !mm; }); micBtn.innerHTML = mm ? '🔇 Mic Off' : '🎤 Mic On'; micBtn.style.opacity = mm ? '0.5' : '1'; };
+        bar.appendChild(micBtn);
+      } catch { askBtn.innerHTML = '🎤 No Permission'; askBtn.disabled = true; }
+    };
+    bar.appendChild(askBtn);
+  }
+
+  inner.appendChild(bar);
+}
+
+function _audioBtnStyle() {
+  return 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#e2e8f0;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit;';
 }
 
 window.openCamStream = async function(entity, label) {
