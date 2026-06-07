@@ -996,22 +996,34 @@ function _camPopupShell(label, entity) {
 function _camMjpegFallback(popup, entity, tk) {
   const video = document.getElementById('cam-video');
   const msg   = document.getElementById('cam-msg');
-  if (video) video.style.display = 'none';
+  if (video) { video.style.display = 'none'; video.src = ''; }
+  if (popup._hls) { popup._hls.destroy(); popup._hls = null; }
   if (popup._pc) { popup._pc.close(); popup._pc = null; }
+  if (window._camStillInt) { clearInterval(window._camStillInt); window._camStillInt = null; }
+
+  // Remove any existing MJPEG img
+  popup.querySelector('.cam-mjpeg-img')?.remove();
 
   const img = document.createElement('img');
+  img.className = 'cam-mjpeg-img';
   img.style.cssText = 'width:100%;border-radius:16px;object-fit:contain;max-height:70vh;display:block;';
+  // Use MJPEG stream endpoint — continuous live video piped from HA
+  img.src = `/api/camera/${entity}/mjpeg?token=${encodeURIComponent(tk)}`;
+  // If MJPEG stream fails (camera doesn't support it), fall back to cycling snapshots
+  img.onerror = () => {
+    img.onerror = null;
+    const load = () => { img.src = `/api/camera/${entity}?token=${encodeURIComponent(tk)}&_t=${Date.now()}`; };
+    load();
+    window._camStillInt = setInterval(load, 3000);
+  };
+
   if (msg) { msg.style.display = 'none'; popup.querySelector('.cam-popup-inner').insertBefore(img, msg); }
 
   const title = document.getElementById('cam-popup-title');
   if (title && !title.nextElementSibling?.classList?.contains('cam-snap-badge')) {
     title.insertAdjacentHTML('afterend',
-      '<span class="cam-snap-badge" style="font-size:10px;color:#4ade80;background:rgba(74,222,128,.15);padding:3px 9px;border-radius:50px;border:1px solid rgba(74,222,128,.3);margin-left:8px;">↻ Snapshot</span>');
+      '<span class="cam-snap-badge" style="font-size:10px;color:#4ade80;background:rgba(74,222,128,.15);padding:3px 9px;border-radius:50px;border:1px solid rgba(74,222,128,.3);margin-left:8px;">▶ Live</span>');
   }
-
-  const load = () => { img.src = `/api/camera/${entity}?token=${encodeURIComponent(tk)}&_t=${Date.now()}`; };
-  load();
-  window._camStillInt = setInterval(load, 3000);
 }
 
 async function _tryScryptedStream(popup, entity, tk) {
@@ -1105,19 +1117,20 @@ async function _tryHlsFallback(popup, entity, tk) {
         video.play().catch(() => {});
       });
       hls.on(Hls.Events.ERROR, (_e, d) => {
-        if (d.fatal) { hls.destroy(); popup._hls = null; _showStreamError(popup, `HA HLS error: ${d.details}`, entity, tk); }
+        if (d.fatal) { hls.destroy(); popup._hls = null; _camMjpegFallback(popup, entity, tk); }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = data.url;
       video.style.display = 'block';
       if (msg) msg.style.display = 'none';
-      video.onerror = () => _showStreamError(popup, 'HA stream failed', entity, tk);
+      video.onerror = () => _camMjpegFallback(popup, entity, tk);
       video.play().catch(() => {});
     } else {
-      throw new Error('HLS not supported');
+      _camMjpegFallback(popup, entity, tk); return;
     }
   } catch(err) {
-    _showStreamError(popup, 'Stream unavailable: ' + err.message, entity, tk);
+    console.error('[cam] HA HLS failed, using MJPEG:', err.message);
+    _camMjpegFallback(popup, entity, tk);
   }
 }
 

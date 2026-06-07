@@ -370,6 +370,31 @@ app.get('/api/ha/entities', async (req, res) => {
 
 // ── Camera proxy ──────────────────────────────────────────────────────────────
 
+// MJPEG live stream — pipes HA's multipart stream directly to the browser
+app.get('/api/camera/:entityId/mjpeg', async (req, res) => {
+  const payload = authToken(req);
+  if (!payload) return res.status(401).send('Unauthorized');
+  const entityId = req.params.entityId;
+  if (!/^camera\.[a-z0-9_]+$/.test(entityId)) return res.status(400).send('Invalid entity');
+  const config = getConfig();
+  if (!config) return res.status(503).send('Not configured');
+  try {
+    const { default: fetch } = await import('node-fetch');
+    const upstream = await fetch(
+      `${config.haUrl}/api/camera_proxy_stream/${entityId}`,
+      { headers: { Authorization: `Bearer ${config.haToken}` } } as Parameters<typeof fetch>[1],
+    );
+    if (!upstream.ok) return res.status(upstream.status).send(`HA error ${upstream.status}`);
+    res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'multipart/x-mixed-replace; boundary=--frameboundary');
+    res.setHeader('Cache-Control', 'no-cache, no-store');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    upstream.body?.pipe(res);
+    req.on('close', () => { (upstream.body as NodeJS.ReadableStream | null)?.destroy?.(); });
+  } catch (e) {
+    res.status(502).send('MJPEG error: ' + (e as Error).message);
+  }
+});
+
 app.get('/api/camera/:entityId', async (req, res) => {
   const payload = authToken(req);
   if (!payload) return res.status(401).send('Unauthorized');
