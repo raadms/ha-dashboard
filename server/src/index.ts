@@ -388,8 +388,10 @@ app.get('/api/camera/:entityId/mjpeg', async (req, res) => {
     res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'multipart/x-mixed-replace; boundary=--frameboundary');
     res.setHeader('Cache-Control', 'no-cache, no-store');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    upstream.body?.pipe(res);
-    req.on('close', () => { (upstream.body as NodeJS.ReadableStream | null)?.destroy?.(); });
+    if (upstream.body) {
+      upstream.body.pipe(res);
+      req.on('close', () => { try { (upstream.body as import('stream').Readable).destroy(); } catch {} });
+    }
   } catch (e) {
     res.status(502).send('MJPEG error: ' + (e as Error).message);
   }
