@@ -395,6 +395,30 @@ app.get('/api/camera/:entityId/mjpeg', async (req, res) => {
   }
 });
 
+// WebRTC signaling — browser sends SDP offer, HA go2rtc returns SDP answer
+app.post('/api/camera/:entityId/webrtc', async (req, res) => {
+  const payload = authToken(req);
+  if (!payload) return res.status(401).json({ error: 'Unauthorized' });
+  const entityId = req.params.entityId;
+  if (!/^camera\.[a-z0-9_]+$/.test(entityId)) return res.status(400).json({ error: 'Invalid entity' });
+  const config = getConfig();
+  if (!config) return res.status(503).json({ error: 'Not configured' });
+  const { offer } = req.body as { offer?: string };
+  if (!offer) return res.status(400).json({ error: 'offer SDP required' });
+  try {
+    const result = await haWebSocketCall<{ answer?: string; session_id?: string }>({
+      type: 'camera/webrtc',
+      entity_id: entityId,
+      offer,
+    });
+    if (!result?.answer) return res.status(502).json({ error: 'No SDP answer from HA go2rtc' });
+    res.json({ answer: result.answer, session_id: result.session_id ?? '' });
+  } catch (e) {
+    console.error('[WebRTC signaling]', (e as Error).message);
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
+
 app.get('/api/camera/:entityId', async (req, res) => {
   const payload = authToken(req);
   if (!payload) return res.status(401).send('Unauthorized');

@@ -1026,191 +1026,157 @@ function _camMjpegFallback(popup, entity, tk) {
   }
 }
 
-async function _tryScryptedStream(popup, entity, tk) {
+// ── Stream attempt 1: WebRTC via HA go2rtc ────────────────────────────────────
+// go2rtc is built into HA since 2023.4. Browser sends SDP offer → HA returns
+// SDP answer → RTCPeerConnection delivers live video + audio directly into
+// the <video> element. No HLS, no latency, no proxying.
+async function _tryWebRTC(popup, entity, tk) {
   const video = document.getElementById('cam-video');
   const msg   = document.getElementById('cam-msg');
-  try {
-    if (msg) msg.textContent = '⏳ Loading live stream…';
-    const r = await fetch(`/api/camera/${entity}/scrypted-stream`, { headers: { Authorization: `Bearer ${tk}` } });
-    if (!r.ok) { _tryHlsFallback(popup, entity, tk); return; }
-    const data = await r.json();
-    if (data.error || !data.url) throw new Error(data.error ?? 'no stream URL');
+  if (msg) msg.textContent = '⏳ Connecting…';
 
-    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: false, lowLatencyMode: true });
-      popup._hls = hls;
-      hls.loadSource(data.url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (msg) msg.style.display = 'none';
-        video.style.display = 'block';
-        video.play().catch(() => {});
-      });
-      hls.on(Hls.Events.ERROR, (_e, d) => {
-        if (d.fatal) {
-          hls.destroy(); popup._hls = null;
-          _tryHlsFallback(popup, entity, tk);
-        }
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari / iPadOS — native HLS with audio
-      video.src = data.url;
-      video.load();
-      video.onerror = () => _tryHlsFallback(popup, entity, tk);
-      if (msg) msg.style.display = 'none';
-      video.style.display = 'block';
-      video.play().catch(() => {});
-    } else {
-      throw new Error('HLS not supported in this browser');
-    }
-  } catch(err) {
-    console.error('[cam] Scrypted stream failed, trying HA HLS:', err.message);
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    bundlePolicy: 'max-bundle',
+    sdpSemantics: 'unified-plan',
+  });
+  popup._pc = pc;
+
+  // Receive-only — no microphone/camera needed from the browser side
+  pc.addTransceiver('video', { direction: 'recvonly' });
+  pc.addTransceiver('audio', { direction: 'recvonly' });
+
+  // When a media track arrives, attach it to the <video> element
+  pc.ontrack = (e) => {
+    if (!e.streams?.[0]) return;
+    video.srcObject = e.streams[0];
+    if (msg) msg.style.display = 'none';
+    video.style.display = 'block';
+    video.play().catch(() => {});
+    _setCamBadge('▶ Live  WebRTC');
+  };
+
+  const fallback = () => {
+    if (!popup._pc) return;
+    popup._pc = null; pc.close();
     _tryHlsFallback(popup, entity, tk);
-  }
-}
+  };
 
-function _showStreamError(popup, reason, entity, tk) {
-  const video = document.getElementById('cam-video');
-  const msg   = document.getElementById('cam-msg');
-  if (video) { video.style.display = 'none'; video.src = ''; }
-  if (popup._hls) { popup._hls.destroy(); popup._hls = null; }
-  if (msg) {
-    msg.style.display = 'block';
-    msg.innerHTML = `
-      <div style="color:#f87171;font-size:14px;margin-bottom:8px">⚠️ Live stream unavailable</div>
-      <div style="font-size:11px;color:#64748b;margin-bottom:18px;max-width:340px;margin-left:auto;margin-right:auto">${reason}</div>
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-        <button id="cam-retry-btn"
-          style="background:rgba(91,141,238,.18);border:1px solid rgba(91,141,238,.4);color:#93c5fd;border-radius:8px;padding:9px 18px;font-size:12px;cursor:pointer;font-family:inherit">
-          ↺ Retry
-        </button>
-        <button id="cam-snap-btn"
-          style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#94a3b8;border-radius:8px;padding:9px 18px;font-size:12px;cursor:pointer;font-family:inherit">
-          📷 Snapshot
-        </button>
-      </div>`;
-    document.getElementById('cam-retry-btn')?.addEventListener('click', () => {
-      msg.textContent = '⏳ Retrying…';
-      _tryScryptedStream(popup, entity, tk);
-    });
-    document.getElementById('cam-snap-btn')?.addEventListener('click', () => _camMjpegFallback(popup, entity, tk));
-  }
-}
-
-async function _tryHlsFallback(popup, entity, tk) {
-  const video = document.getElementById('cam-video');
-  const msg   = document.getElementById('cam-msg');
-  if (msg) msg.textContent = '⏳ Trying HA stream…';
-  try {
-    const r = await fetch(`/api/camera/${entity}/stream`, { headers: { Authorization: `Bearer ${tk}` } });
-    const data = await r.json();
-    if (data.error || !data.url) throw new Error(data.error ?? 'no url');
-
-    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: false });
-      popup._hls = hls;
-      hls.loadSource(data.url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (msg) msg.style.display = 'none';
-        video.style.display = 'block';
-        video.play().catch(() => {});
-      });
-      hls.on(Hls.Events.ERROR, (_e, d) => {
-        if (d.fatal) { hls.destroy(); popup._hls = null; _camMjpegFallback(popup, entity, tk); }
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = data.url;
-      video.style.display = 'block';
-      if (msg) msg.style.display = 'none';
-      video.onerror = () => _camMjpegFallback(popup, entity, tk);
-      video.play().catch(() => {});
-    } else {
-      _camMjpegFallback(popup, entity, tk); return;
-    }
-  } catch(err) {
-    console.error('[cam] HA HLS failed, using MJPEG:', err.message);
-    _camMjpegFallback(popup, entity, tk);
-  }
-}
-
-window.openCamStream = async function(entity, label) {
-  const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
-  const popup = _camPopupShell(label, entity);
-  const msg = document.getElementById('cam-msg');
-  if (msg) msg.textContent = '⏳ Loading live stream…';
-  // Go straight to Scrypted HLS — live video + audio, no WebRTC timeout delay
-  // Falls back: Scrypted HLS → HA HLS → snapshot refresh
-  _tryScryptedStream(popup, entity, tk);
-};
-
-// kept for any legacy call sites
-window._openCamStream_webrtc = async function(entity, label) {
-  const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
-  const popup = _camPopupShell(label, entity);
-  const video = document.getElementById('cam-video');
-  const msg   = document.getElementById('cam-msg');
+  pc.oniceconnectionstatechange = () => {
+    if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) fallback();
+  };
+  pc.onconnectionstatechange = () => {
+    if (['failed', 'disconnected'].includes(pc.connectionState)) fallback();
+  };
 
   try {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ],
-    });
-    popup._pc = pc;
-
-    pc.addTransceiver('video', { direction: 'recvonly' });
-    pc.addTransceiver('audio', { direction: 'recvonly' });
-
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
+    // Wait for ICE gathering (max 3 s) so the offer SDP includes all candidates
     await new Promise(resolve => {
-      if (pc.iceGatheringState === 'complete') return resolve(null);
-      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(null); };
-      setTimeout(resolve, 5000, null);
+      if (pc.iceGatheringState === 'complete') { resolve(null); return; }
+      const h = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', h); resolve(null); } };
+      pc.addEventListener('icegatheringstatechange', h);
+      setTimeout(resolve, 3000, null);
     });
 
-    const r = await fetch(`/api/camera/${entity}/webrtc-offer`, {
+    const r = await fetch(`/api/camera/${entity}/webrtc`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tk}` },
       body: JSON.stringify({ offer: pc.localDescription?.sdp }),
     });
     const data = await r.json();
-    if (data.error || !data.answer) throw new Error(data.error ?? 'No WebRTC answer');
+    if (!r.ok || data.error || !data.answer) throw new Error(data.error ?? 'No SDP answer from HA go2rtc');
 
     await pc.setRemoteDescription({ type: 'answer', sdp: data.answer });
 
-    const fallbackTimer = setTimeout(() => {
-      if (video && video.style.display === 'none') {
-        pc.close(); popup._pc = null;
-        _tryScryptedStream(popup, entity, tk);
-      }
-    }, 10_000);
+    // Fall back if no track arrives within 8 s
+    const connTimer = setTimeout(() => {
+      if (video.style.display === 'none') fallback();
+    }, 8000);
+    pc.addEventListener('connectionstatechange', () => {
+      if (pc.connectionState === 'connected') clearTimeout(connTimer);
+    });
 
-    pc.ontrack = e => {
-      clearTimeout(fallbackTimer);
-      if (!video.srcObject) {
-        video.srcObject = new MediaStream();
-        msg.style.display = 'none';
-        video.style.display = 'block';
-        video.play().catch(() => {});
-      }
-      video.srcObject.addTrack(e.track);
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        clearTimeout(fallbackTimer);
-        _tryScryptedStream(popup, entity, tk);
-      }
-    };
-
-  } catch {
-    _tryScryptedStream(popup, entity, tk);
+  } catch (err) {
+    console.warn('[cam] WebRTC failed:', err.message, '— trying HLS');
+    fallback();
   }
+}
+
+// ── Stream attempt 2 & 3: HLS (Scrypted first, then HA) ──────────────────────
+function _playHls(popup, entity, tk, url) {
+  const video = document.getElementById('cam-video');
+  const msg   = document.getElementById('cam-msg');
+  if (popup._hls) { popup._hls.destroy(); popup._hls = null; }
+  if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+    const hls = new Hls({ enableWorker: false, lowLatencyMode: true });
+    popup._hls = hls;
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      if (msg) msg.style.display = 'none';
+      video.style.display = 'block';
+      video.play().catch(() => {});
+    });
+    hls.on(Hls.Events.ERROR, (_e, d) => {
+      if (d.fatal) { hls.destroy(); popup._hls = null; _camMjpegFallback(popup, entity, tk); }
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    // Safari / iPadOS native HLS
+    video.src = url; video.load();
+    video.onerror = () => _camMjpegFallback(popup, entity, tk);
+    if (msg) msg.style.display = 'none';
+    video.style.display = 'block';
+    video.play().catch(() => {});
+  } else {
+    _camMjpegFallback(popup, entity, tk);
+  }
+}
+
+async function _tryHlsFallback(popup, entity, tk) {
+  const msg = document.getElementById('cam-msg');
+
+  // Try Scrypted HLS
+  try {
+    if (msg) msg.textContent = '⏳ Trying HLS…';
+    const r = await fetch(`/api/camera/${entity}/scrypted-stream`, { headers: { Authorization: `Bearer ${tk}` } });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.url) { _playHls(popup, entity, tk, d.url); return; }
+    }
+  } catch {}
+
+  // Try HA HLS
+  try {
+    const r = await fetch(`/api/camera/${entity}/stream`, { headers: { Authorization: `Bearer ${tk}` } });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.url) { _playHls(popup, entity, tk, d.url); return; }
+    }
+  } catch {}
+
+  // Both HLS methods failed — use MJPEG live stream (guaranteed to work)
+  console.warn('[cam] HLS unavailable, switching to MJPEG live stream');
+  _camMjpegFallback(popup, entity, tk);
+}
+
+function _setCamBadge(text) {
+  const title = document.getElementById('cam-popup-title');
+  if (!title) return;
+  title.nextElementSibling?.classList?.contains('cam-snap-badge') && title.nextElementSibling.remove();
+  title.insertAdjacentHTML('afterend',
+    `<span class="cam-snap-badge" style="font-size:10px;color:#4ade80;background:rgba(74,222,128,.15);padding:3px 9px;border-radius:50px;border:1px solid rgba(74,222,128,.3);margin-left:8px;">${text}</span>`);
+}
+
+window.openCamStream = async function(entity, label) {
+  const tk = sessionStorage.getItem('ha_dash_token'); if (!tk) return;
+  const popup = _camPopupShell(label, entity);
+  // Chain: WebRTC (go2rtc) → HLS (Scrypted/HA) → MJPEG live → snapshots
+  _tryWebRTC(popup, entity, tk);
 };
+
 
 // ── Fallback entity lists (used if /api/layout fails) ──────────────────────
 const _FALLBACK_ROOMS = [
