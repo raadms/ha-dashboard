@@ -1037,15 +1037,6 @@ async function _tryWebRTC(popup, entity, tk) {
   const msg   = document.getElementById('cam-msg');
   if (msg) msg.textContent = '⏳ Connecting…';
 
-  // ── Request microphone for two-way audio (optional — stream still works without it)
-  let micStream = null;
-  try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  } catch (e) {
-    console.log('[cam] Mic not available (one-way only):', e.message);
-  }
-  popup._micStream = micStream;
-
   const pc = new RTCPeerConnection({
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
     bundlePolicy: 'max-bundle',
@@ -1053,17 +1044,10 @@ async function _tryWebRTC(popup, entity, tk) {
   });
   popup._pc = pc;
 
-  // Video: receive only
+  // Receive-only for initial offer — keeps go2rtc negotiation simple and reliable
+  // Two-way audio is added on-demand via the Talk button (renegotiation)
   pc.addTransceiver('video', { direction: 'recvonly' });
-
-  if (micStream) {
-    // Two-way audio: add mic track so go2rtc routes our voice to the doorbell speaker
-    micStream.getAudioTracks().forEach(t => pc.addTrack(t, micStream));
-    // Audio transceiver is automatically sendrecv when we add a local track
-  } else {
-    // No mic permission — receive camera audio only
-    pc.addTransceiver('audio', { direction: 'recvonly' });
-  }
+  pc.addTransceiver('audio', { direction: 'recvonly' });
 
   // When a media track arrives, attach the stream to the <video> element
   pc.ontrack = (e) => {
@@ -1071,7 +1055,7 @@ async function _tryWebRTC(popup, entity, tk) {
     video.srcObject = e.streams[0];
     if (msg) msg.style.display = 'none';
     video.style.display = 'block';
-    // iOS/Safari may block autoplay with audio — play muted first then offer unmute
+    // Try with audio first; iOS Safari may block — fall back to muted + unmute button
     video.muted = false;
     video.play().catch(() => {
       video.muted = true;
@@ -1079,13 +1063,13 @@ async function _tryWebRTC(popup, entity, tk) {
       _showUnmuteBtn(popup, video);
     });
     _setCamBadge('▶ Live  WebRTC');
-    _renderAudioControls(popup, micStream);
+    _renderAudioControls(popup, entity, tk);
   };
 
   const fallback = () => {
     if (!popup._pc) return;
     popup._pc = null; pc.close();
-    if (micStream) { micStream.getTracks().forEach(t => t.stop()); popup._micStream = null; }
+    if (popup._micStream) { popup._micStream.getTracks().forEach(t => t.stop()); popup._micStream = null; }
     _tryHlsFallback(popup, entity, tk);
   };
 
@@ -1210,61 +1194,81 @@ function _showUnmuteBtn(popup, video) {
   inner.appendChild(btn);
 }
 
-// Renders microphone + speaker controls below the video
-function _renderAudioControls(popup, micStream) {
+// Renders speaker + talk controls below the video after WebRTC connects
+function _renderAudioControls(popup, entity, tk) {
   if (popup.querySelector('#cam-audio-controls')) return;
   const inner = popup.querySelector('.cam-popup-inner');
+  const video = popup.querySelector('#cam-video');
   const bar = document.createElement('div');
   bar.id = 'cam-audio-controls';
-  bar.style.cssText = 'display:flex;gap:10px;justify-content:center;padding:10px 0 4px;';
+  bar.style.cssText = 'display:flex;gap:10px;justify-content:center;padding:10px 0 4px;flex-wrap:wrap;';
 
-  // Speaker button (mute/unmute camera audio)
-  const video = popup.querySelector('#cam-video');
+  // ── Speaker toggle ────────────────────────────────────────────────────────
   const spkBtn = document.createElement('button');
   spkBtn.style.cssText = _audioBtnStyle();
-  spkBtn.innerHTML = '🔊 Speaker';
+  spkBtn.innerHTML = '🔊 Speaker On';
   spkBtn.onclick = () => {
     video.muted = !video.muted;
-    spkBtn.innerHTML = video.muted ? '🔇 Unmute' : '🔊 Speaker';
+    spkBtn.innerHTML = video.muted ? '🔇 Speaker Off' : '🔊 Speaker On';
     spkBtn.style.opacity = video.muted ? '0.5' : '1';
   };
   bar.appendChild(spkBtn);
 
-  // Mic button — only shown if we have microphone access
-  if (micStream) {
-    const micBtn = document.createElement('button');
-    micBtn.style.cssText = _audioBtnStyle();
-    micBtn.innerHTML = '🎤 Mic On';
-    let micMuted = false;
-    micBtn.onclick = () => {
-      micMuted = !micMuted;
-      micStream.getAudioTracks().forEach(t => { t.enabled = !micMuted; });
-      micBtn.innerHTML = micMuted ? '🔇 Mic Off' : '🎤 Mic On';
-      micBtn.style.opacity = micMuted ? '0.5' : '1';
-    };
-    bar.appendChild(micBtn);
-  } else {
-    // No mic — show a button to request permission
-    const askBtn = document.createElement('button');
-    askBtn.style.cssText = _audioBtnStyle();
-    askBtn.innerHTML = '🎤 Enable Mic';
-    askBtn.onclick = async () => {
-      try {
-        const ms = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        popup._micStream = ms;
-        if (popup._pc) ms.getAudioTracks().forEach(t => popup._pc.addTrack(t, ms));
-        askBtn.remove();
-        const micBtn = document.createElement('button');
-        micBtn.style.cssText = _audioBtnStyle();
-        micBtn.innerHTML = '🎤 Mic On';
-        let mm = false;
-        micBtn.onclick = () => { mm = !mm; ms.getAudioTracks().forEach(t => { t.enabled = !mm; }); micBtn.innerHTML = mm ? '🔇 Mic Off' : '🎤 Mic On'; micBtn.style.opacity = mm ? '0.5' : '1'; };
-        bar.appendChild(micBtn);
-      } catch { askBtn.innerHTML = '🎤 No Permission'; askBtn.disabled = true; }
-    };
-    bar.appendChild(askBtn);
-  }
+  // ── Talk button — requests mic and renegotiates WebRTC ────────────────────
+  const talkBtn = document.createElement('button');
+  talkBtn.style.cssText = _audioBtnStyle();
+  talkBtn.innerHTML = '🎤 Talk';
+  let talking = false;
 
+  talkBtn.onclick = async () => {
+    if (talking) {
+      // Stop talking
+      talking = false;
+      if (popup._micStream) { popup._micStream.getTracks().forEach(t => t.stop()); popup._micStream = null; }
+      talkBtn.innerHTML = '🎤 Talk';
+      talkBtn.style.background = 'rgba(255,255,255,.08)';
+      return;
+    }
+    // Start talking — request mic + renegotiate
+    talkBtn.innerHTML = '⏳ …';
+    talkBtn.disabled = true;
+    try {
+      const ms = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      popup._micStream = ms;
+      const pc = popup._pc;
+      if (!pc) { ms.getTracks().forEach(t => t.stop()); return; }
+
+      // Add mic track to existing peer connection
+      ms.getAudioTracks().forEach(t => pc.addTrack(t, ms));
+
+      // Renegotiate with HA go2rtc so it sees our audio track
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await new Promise(resolve => {
+        if (pc.iceGatheringState === 'complete') { resolve(null); return; }
+        const h = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', h); resolve(null); } };
+        pc.addEventListener('icegatheringstatechange', h);
+        setTimeout(resolve, 2000, null);
+      });
+      const r = await fetch(`/api/camera/${entity}/webrtc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tk}` },
+        body: JSON.stringify({ offer: pc.localDescription?.sdp }),
+      });
+      const data = await r.json();
+      if (data.answer) await pc.setRemoteDescription({ type: 'answer', sdp: data.answer });
+
+      talking = true;
+      talkBtn.innerHTML = '🔴 Talking…';
+      talkBtn.style.background = 'rgba(239,68,68,.25)';
+    } catch (e) {
+      talkBtn.innerHTML = '🎤 Talk';
+      if (popup._micStream) { popup._micStream.getTracks().forEach(t => t.stop()); popup._micStream = null; }
+      console.warn('[cam] Talk failed:', e.message);
+    }
+    talkBtn.disabled = false;
+  };
+  bar.appendChild(talkBtn);
   inner.appendChild(bar);
 }
 
