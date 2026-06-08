@@ -980,6 +980,7 @@ function _camPopupShell(label, entity) {
   window.closeCamPopup();
   const popup = document.createElement('div');
   popup.id = 'cam-popup';
+  const bs = _audioBtnStyle();
   popup.innerHTML = `
     <div class="cam-popup-inner">
       <div class="cam-popup-hd">
@@ -987,8 +988,12 @@ function _camPopupShell(label, entity) {
         <button class="cam-close-btn" onclick="window.closeCamPopup()">✕</button>
       </div>
       <video id="cam-video" autoplay playsinline controls
-        style="width:100%;border-radius:16px;background:#000;max-height:70vh;display:none;"></video>
+        style="width:100%;border-radius:16px;background:#000;max-height:65vh;display:none;"></video>
       <div id="cam-msg" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">⏳ Connecting…</div>
+      <div id="cam-audio-controls" style="display:flex;gap:10px;justify-content:center;padding:8px 0 4px;flex-wrap:wrap;">
+        <button id="cam-spk-btn" style="${bs}">🔊 Speaker On</button>
+        <button id="cam-talk-btn" style="${bs}">🎤 Talk</button>
+      </div>
     </div>`;
   document.body.appendChild(popup);
   popup.addEventListener('click', e => { if (e.target === popup) window.closeCamPopup(); });
@@ -1063,7 +1068,6 @@ async function _tryWebRTC(popup, entity, tk) {
       _showUnmuteBtn(popup, video);
     });
     _setCamBadge('▶ Live  WebRTC');
-    _renderAudioControls(popup, entity, tk);
   };
 
   const fallback = () => {
@@ -1084,12 +1088,15 @@ async function _tryWebRTC(popup, entity, tk) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Wait for ICE gathering (max 3 s) so the offer SDP includes all candidates
+    // Wait for ICE gathering — onicecandidate fires with null when complete.
+    // On local WiFi this resolves in < 200 ms; 1 s safety net for slow networks.
+    // Using the icecandidate null-event approach (not iceGatheringState polling)
+    // so we don't accidentally wait the full timeout when gathering finishes fast.
     await new Promise(resolve => {
       if (pc.iceGatheringState === 'complete') { resolve(null); return; }
-      const h = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', h); resolve(null); } };
-      pc.addEventListener('icegatheringstatechange', h);
-      setTimeout(resolve, 3000, null);
+      const onIce = (e) => { if (!e.candidate) { pc.removeEventListener('icecandidate', onIce); resolve(null); } };
+      pc.addEventListener('icecandidate', onIce);
+      setTimeout(resolve, 1000, null);
     });
 
     const r = await fetch(`/api/camera/${entity}/webrtc`, {
@@ -1101,6 +1108,9 @@ async function _tryWebRTC(popup, entity, tk) {
     if (!r.ok || data.error || !data.answer) throw new Error(data.error ?? 'No SDP answer from HA go2rtc');
 
     await pc.setRemoteDescription({ type: 'answer', sdp: data.answer });
+
+    // Bind speaker + talk controls now that we have an active peer connection
+    _bindAudioControls(popup, entity, tk);
 
     // Fall back if no track arrives within 8 s
     const connTimer = setTimeout(() => {
@@ -1194,62 +1204,54 @@ function _showUnmuteBtn(popup, video) {
   inner.appendChild(btn);
 }
 
-// Renders speaker + talk controls below the video after WebRTC connects
-function _renderAudioControls(popup, entity, tk) {
-  if (popup.querySelector('#cam-audio-controls')) return;
-  const inner = popup.querySelector('.cam-popup-inner');
-  const video = popup.querySelector('#cam-video');
-  const bar = document.createElement('div');
-  bar.id = 'cam-audio-controls';
-  bar.style.cssText = 'display:flex;gap:10px;justify-content:center;padding:10px 0 4px;flex-wrap:wrap;';
+// Binds speaker + talk handlers to the buttons already in the popup HTML.
+// Called once after go2rtc returns the SDP answer (connection is establishing).
+// Controls are visible immediately on popup open regardless of WebRTC state.
+function _bindAudioControls(popup, entity, tk) {
+  const video  = popup.querySelector('#cam-video');
+  const spkBtn = popup.querySelector('#cam-spk-btn');
+  const talkBtn= popup.querySelector('#cam-talk-btn');
+  if (!spkBtn || !talkBtn) return;
 
   // ── Speaker toggle ────────────────────────────────────────────────────────
-  const spkBtn = document.createElement('button');
-  spkBtn.style.cssText = _audioBtnStyle();
-  spkBtn.innerHTML = '🔊 Speaker On';
   spkBtn.onclick = () => {
+    if (!video) return;
     video.muted = !video.muted;
     spkBtn.innerHTML = video.muted ? '🔇 Speaker Off' : '🔊 Speaker On';
     spkBtn.style.opacity = video.muted ? '0.5' : '1';
   };
-  bar.appendChild(spkBtn);
 
-  // ── Talk button — requests mic and renegotiates WebRTC ────────────────────
-  const talkBtn = document.createElement('button');
-  talkBtn.style.cssText = _audioBtnStyle();
-  talkBtn.innerHTML = '🎤 Talk';
+  // ── Talk button — requests mic + renegotiates WebRTC ─────────────────────
   let talking = false;
-
   talkBtn.onclick = async () => {
     if (talking) {
-      // Stop talking
       talking = false;
       if (popup._micStream) { popup._micStream.getTracks().forEach(t => t.stop()); popup._micStream = null; }
       talkBtn.innerHTML = '🎤 Talk';
-      talkBtn.style.background = 'rgba(255,255,255,.08)';
+      talkBtn.style.background = '';
       return;
     }
-    // Start talking — request mic + renegotiate
+    if (!popup._pc) { console.warn('[cam] Talk: no active WebRTC connection'); return; }
     talkBtn.innerHTML = '⏳ …';
     talkBtn.disabled = true;
     try {
       const ms = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       popup._micStream = ms;
       const pc = popup._pc;
-      if (!pc) { ms.getTracks().forEach(t => t.stop()); return; }
+      if (!pc) { ms.getTracks().forEach(t => t.stop()); talkBtn.innerHTML = '🎤 Talk'; talkBtn.disabled = false; return; }
 
-      // Add mic track to existing peer connection
       ms.getAudioTracks().forEach(t => pc.addTrack(t, ms));
 
-      // Renegotiate with HA go2rtc so it sees our audio track
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
+      // Same fast ICE wait as initial connection
       await new Promise(resolve => {
         if (pc.iceGatheringState === 'complete') { resolve(null); return; }
-        const h = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', h); resolve(null); } };
-        pc.addEventListener('icegatheringstatechange', h);
-        setTimeout(resolve, 2000, null);
+        const onIce = e => { if (!e.candidate) { pc.removeEventListener('icecandidate', onIce); resolve(null); } };
+        pc.addEventListener('icecandidate', onIce);
+        setTimeout(resolve, 1000, null);
       });
+
       const r = await fetch(`/api/camera/${entity}/webrtc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tk}` },
@@ -1268,8 +1270,6 @@ function _renderAudioControls(popup, entity, tk) {
     }
     talkBtn.disabled = false;
   };
-  bar.appendChild(talkBtn);
-  inner.appendChild(bar);
 }
 
 function _audioBtnStyle() {

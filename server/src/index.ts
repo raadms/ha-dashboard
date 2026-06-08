@@ -398,6 +398,9 @@ app.get('/api/camera/:entityId/mjpeg', async (req, res) => {
 });
 
 // WebRTC signaling — browser sends SDP offer, HA go2rtc returns SDP answer
+// Uses a dedicated signaling function that handles ALL answer delivery modes:
+//   - result.answer / result.sdp / result.answer_sdp   (most HA versions)
+//   - subsequent WebSocket event                        (trickle-ICE variant)
 app.post('/api/camera/:entityId/webrtc', async (req, res) => {
   const payload = authToken(req);
   if (!payload) return res.status(401).json({ error: 'Unauthorized' });
@@ -408,13 +411,8 @@ app.post('/api/camera/:entityId/webrtc', async (req, res) => {
   const { offer } = req.body as { offer?: string };
   if (!offer) return res.status(400).json({ error: 'offer SDP required' });
   try {
-    const result = await haWebSocketCall<{ answer?: string; session_id?: string }>({
-      type: 'camera/webrtc',
-      entity_id: entityId,
-      offer,
-    });
-    if (!result?.answer) return res.status(502).json({ error: 'No SDP answer from HA go2rtc' });
-    res.json({ answer: result.answer, session_id: result.session_id ?? '' });
+    const { answer, sessionId } = await haWebRtcSignal(entityId, offer);
+    res.json({ answer, session_id: sessionId });
   } catch (e) {
     console.error('[WebRTC signaling]', (e as Error).message);
     res.status(502).json({ error: (e as Error).message });
@@ -532,6 +530,54 @@ app.get('/api/hls/:sid/*', async (req, res) => {
 });
 
 // ── Camera streaming helpers ──────────────────────────────────────────────────
+
+// Dedicated WebRTC signaling — handles every answer delivery mode go2rtc uses:
+//   Mode A: answer in result.answer / result.sdp / result.answer_sdp
+//   Mode B: result has no answer → answer arrives in a follow-up event
+async function haWebRtcSignal(entityId: string, offer: string): Promise<{ answer: string; sessionId: string }> {
+  const config = getConfig();
+  if (!config) throw new Error('Not configured');
+  const wsUrl = config.haUrl.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws') + '/api/websocket';
+  return new Promise((resolve, reject) => {
+    const ws = new WsClient(wsUrl, { rejectUnauthorized: false });
+    const timeout = setTimeout(() => { ws.terminate(); reject(new Error('WebRTC signaling timeout')); }, 15_000);
+    let sessionId = '';
+    const done = (answer: string) => { clearTimeout(timeout); try { ws.close(); } catch {} resolve({ answer, sessionId }); };
+    ws.on('error', e => { clearTimeout(timeout); reject(e); });
+    ws.on('message', raw => {
+      type Msg = { type: string; id?: number; success?: boolean; result?: Record<string, unknown>; error?: { message?: string }; event?: Record<string, unknown> };
+      let msg: Msg;
+      try { msg = JSON.parse(raw.toString()) as Msg; } catch { return; }
+
+      if (msg.type === 'auth_required') {
+        ws.send(JSON.stringify({ type: 'auth', access_token: config.haToken }));
+
+      } else if (msg.type === 'auth_ok') {
+        // camera/webrtc is the standard HA go2rtc command (HA 2023.4+)
+        ws.send(JSON.stringify({ id: 1, type: 'camera/webrtc', entity_id: entityId, offer }));
+
+      } else if (msg.type === 'result') {
+        if (!msg.success) {
+          clearTimeout(timeout); try { ws.close(); } catch {}
+          reject(new Error(msg.error?.message ?? 'WebRTC failed')); return;
+        }
+        const r = msg.result ?? {};
+        sessionId = (r['session_id'] as string) ?? '';
+        // Try all field names go2rtc / HA may use
+        const answer = (r['answer'] ?? r['sdp'] ?? r['answer_sdp']) as string | undefined;
+        if (answer) { done(answer); return; }
+        // answer not in result → keep WS open, wait for event (Mode B)
+
+      } else if (msg.type === 'event') {
+        // go2rtc trickle-ICE: answer arrives in a subsequent event
+        const ev = (msg.event ?? msg) as Record<string, unknown>;
+        const data = (ev['data'] ?? ev) as Record<string, unknown>;
+        const answer = (data['answer'] ?? data['sdp'] ?? data['answer_sdp']) as string | undefined;
+        if (answer) done(answer);
+      }
+    });
+  });
+}
 
 async function haWebSocketCall<T>(payload: Record<string, unknown>): Promise<T> {
   const config = getConfig();
