@@ -745,9 +745,16 @@ function syncRadio(isOn) {
   const dot = document.getElementById('radio-app-dot');
   if (dot) dot.style.background = isOn ? '#4ade80' : '#6b7280';
   const ico = document.getElementById('radio-app-ico');
-  if (ico) ico.style.opacity = isOn ? '1' : '0.4';
+  if (ico) ico.style.opacity = isOn ? '1' : '0.45';
   const sub = document.getElementById('radio-tv-sub');
   if (sub) sub.textContent = _radioEntity() + ' · Tap to toggle';
+  // Home page app card — green glow when on
+  const appMk = document.getElementById('app-mk');
+  if (appMk) {
+    appMk.style.borderColor  = isOn ? 'rgba(74,222,128,.65)' : '';
+    appMk.style.background   = isOn ? 'rgba(74,222,128,.10)' : '';
+    appMk.style.boxShadow    = isOn ? '0 0 14px rgba(74,222,128,.18)' : '';
+  }
 }
 window.updateRadioToggle = () => {};
 
