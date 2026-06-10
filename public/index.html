@@ -258,6 +258,12 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
 .ta.sh{border-color:rgba(124,58,237,.35);}.ta.px{border-color:rgba(229,160,13,.35);}
 .ta.st{border-color:rgba(37,99,235,.35);}.ta.mk{border-color:rgba(16,185,129,.35);}
 .hp-box{background:rgba(249,115,22,.07);border:1px solid rgba(249,115,22,.22);border-radius:16px;padding:16px;}
+.rtabs{display:flex;gap:8px;margin-bottom:20px;}
+.rtab{flex:1;padding:10px 8px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .18s;}
+.rtab.active{background:rgba(91,141,238,.18);border-color:rgba(91,141,238,.4);color:#5b8dee;}
+.rtab:hover:not(.active){background:rgba(255,255,255,.08);color:var(--text);}
+.rpow{border-color:rgba(248,113,113,.3)!important;color:#f87171!important;}
+.rksrc{border-color:rgba(56,189,248,.25)!important;color:#38bdf8!important;font-size:11px!important;}
 
 /* ═══ PAGE SYSTEM ═══ */
 .page{display:none;}
@@ -699,19 +705,77 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
   <div class="sh"><h2>TV & Media Control</h2></div>
   <div class="tv-grid">
     <div class="rbox">
-      <div class="rtitle">LG TV Remote Control</div>
-      <div class="dpad">
-        <button class="rk sp"></button><button class="rk">▲</button><button class="rk sp"></button>
-        <button class="rk">◀</button><button class="rk ok">OK</button><button class="rk">▶</button>
-        <button class="rk sp"></button><button class="rk">▼</button><button class="rk sp"></button>
+      <!-- Tab switcher -->
+      <div class="rtabs">
+        <button class="rtab active" id="rtab-lg" onclick="switchRemote('lg')">📺 LG TV</button>
+        <button class="rtab" id="rtab-atv" onclick="switchRemote('atv')">🍎 Apple TV</button>
       </div>
-      <div class="rrow" style="margin-top:18px;">
-        <button class="rk2">⏮</button><button class="rk2" style="background:#5b8dee;color:white;">⏸ Pause</button><button class="rk2">⏭</button>
+
+      <!-- ── LG TV Remote ── -->
+      <div id="remote-lg">
+        <div class="rrow" style="margin-bottom:14px;">
+          <button class="rk2 rpow" data-lg="POWER">⏻ Power</button>
+          <button class="rk2" data-lg="MUTE">🔇</button>
+          <button class="rk2" data-lg="VOLUMEDOWN">🔉</button>
+          <button class="rk2" data-lg="VOLUMEUP">🔊</button>
+          <button class="rk2" data-lg="CHANNELUP">CH+</button>
+          <button class="rk2" data-lg="CHANNELDOWN">CH−</button>
+        </div>
+        <div class="dpad">
+          <button class="rk sp"></button><button class="rk" data-lg="UP">▲</button><button class="rk sp"></button>
+          <button class="rk" data-lg="LEFT">◀</button><button class="rk ok" data-lg="ENTER">OK</button><button class="rk" data-lg="RIGHT">▶</button>
+          <button class="rk sp"></button><button class="rk" data-lg="DOWN">▼</button><button class="rk sp"></button>
+        </div>
+        <div class="rrow" style="margin-top:14px;">
+          <button class="rk2" data-lg="BACK">↩ Back</button>
+          <button class="rk2" data-lg="HOME">🏠 Home</button>
+          <button class="rk2" data-lg="MENU">☰ Menu</button>
+          <button class="rk2" data-lg="EXIT">✕ Exit</button>
+        </div>
+        <div class="rrow" style="margin-top:10px;">
+          <button class="rk2" data-lg="REWIND">⏪</button>
+          <button class="rk2" data-lg="PLAY" style="background:#5b8dee;color:white;">▶ Play</button>
+          <button class="rk2" data-lg="PAUSE">⏸</button>
+          <button class="rk2" data-lg="FASTFORWARD">⏩</button>
+          <button class="rk2" data-lg="STOP">⏹</button>
+        </div>
+        <div class="rrow" style="margin-top:10px;">
+          <button class="rk2 rksrc" data-lg-src="HDMI1">HDMI 1</button>
+          <button class="rk2 rksrc" data-lg-src="HDMI2">HDMI 2</button>
+          <button class="rk2 rksrc" data-lg-src="HDMI3">HDMI 3</button>
+          <button class="rk2 rksrc" data-lg-src="HDMI4">HDMI 4</button>
+        </div>
       </div>
-      <div class="rrow">
-        <button class="rk2">🏠 Home</button><button class="rk2">↩ Back</button><button class="rk2">⚙️ Menu</button><button class="rk2">🔇 Mute</button>
+
+      <!-- ── Apple TV Remote ── -->
+      <div id="remote-atv" style="display:none;">
+        <div class="rrow" style="margin-bottom:14px;">
+          <button class="rk2" data-atv="menu">↩ Back</button>
+          <button class="rk2" data-atv="home">🏠 Home</button>
+          <button class="rk2" data-atv="top_menu">⊞ Top</button>
+          <button class="rk2" data-atv="suspend">😴 Sleep</button>
+        </div>
+        <div class="dpad">
+          <button class="rk sp"></button><button class="rk" data-atv="up">▲</button><button class="rk sp"></button>
+          <button class="rk" data-atv="left">◀</button><button class="rk ok" data-atv="select">OK</button><button class="rk" data-atv="right">▶</button>
+          <button class="rk sp"></button><button class="rk" data-atv="down">▼</button><button class="rk sp"></button>
+        </div>
+        <div class="rrow" style="margin-top:14px;">
+          <button class="rk2" data-atv="skip_backward">⏮ Skip</button>
+          <button class="rk2" data-atv="play_pause" style="background:#5b8dee;color:white;">⏯ Play/Pause</button>
+          <button class="rk2" data-atv="skip_forward">Skip ⏭</button>
+        </div>
+        <div class="rrow" style="margin-top:10px;">
+          <button class="rk2" data-atv="volume_down">🔉 Vol−</button>
+          <button class="rk2" data-atv="volume_up">🔊 Vol+</button>
+        </div>
+        <div class="rrow" style="margin-top:10px;">
+          <button class="rk2" data-atv="channel_up">CH+</button>
+          <button class="rk2" data-atv="channel_down">CH−</button>
+        </div>
       </div>
     </div>
+
     <div class="tright">
       <div>
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;">Streaming Apps</div>

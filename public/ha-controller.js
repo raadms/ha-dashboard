@@ -913,18 +913,30 @@ document.addEventListener('DOMContentLoaded', () => {
   bindMediaControls('media_player.lg_webos_tv_uj670v','.mc-tv');
   bindMediaControls('media_player.appletv','.mc-atv');
   bindMediaControls('media_player.homepod_mini','#homepod-card');
-  // TV remote
-  const tvEntity = L?.media?.tvRemote ?? 'media_player.lg_webos_tv_uj670v';
-  document.querySelectorAll('.rk2').forEach(btn => {
-    const t = btn.textContent.trim();
-    if (t.includes('⏮')) btn.onclick = () => window.haMediaCmd(tvEntity,'media_previous_track');
-    if (t.includes('⏸')) btn.onclick = () => window.haMediaCmd(tvEntity,'media_play_pause');
-    if (t.includes('⏭')) btn.onclick = () => window.haMediaCmd(tvEntity,'media_next_track');
-    if (t.includes('Home')) btn.onclick = () => window.haMediaCmd(tvEntity,'select_source',{source:'Home'});
-    if (t.includes('Back')) btn.onclick = () => window.haMediaCmd(tvEntity,'select_source',{source:'Back'});
-    if (t.includes('Mute')) btn.onclick = () => window.haMediaCmd(tvEntity,'volume_mute',{is_volume_muted:true});
+  // ── LG TV remote — webostv.button ────────────────────────────────────────
+  const lgEntity = L?.media?.tvRemote ?? 'media_player.lg_webos_tv_uj670v';
+  document.querySelectorAll('[data-lg]').forEach(btn => {
+    const cmd = btn.dataset.lg;
+    btn.onclick = () => callHA('webostv', 'button', lgEntity, { button: cmd });
+  });
+  document.querySelectorAll('[data-lg-src]').forEach(btn => {
+    const src = btn.dataset.lgSrc;
+    btn.onclick = () => callHA('media_player', 'select_source', lgEntity, { source: src });
+  });
+  // ── Apple TV remote — remote.send_command ────────────────────────────────
+  const atvEntity = 'remote.appletv';
+  document.querySelectorAll('[data-atv]').forEach(btn => {
+    const cmd = btn.dataset.atv;
+    btn.onclick = () => callHA('remote', 'send_command', atvEntity, { command: cmd });
   });
 });
+
+window.switchRemote = function(type) {
+  document.getElementById('remote-lg').style.display  = type === 'lg'  ? '' : 'none';
+  document.getElementById('remote-atv').style.display = type === 'atv' ? '' : 'none';
+  document.getElementById('rtab-lg').classList.toggle('active',  type === 'lg');
+  document.getElementById('rtab-atv').classList.toggle('active', type === 'atv');
+};
 
 function bindMediaControls(entity, selector) {
   const card = document.querySelector(selector); if (!card) return;
