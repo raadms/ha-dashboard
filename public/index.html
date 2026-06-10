@@ -182,6 +182,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
   padding:13px 18px;background:var(--g);border:1px solid var(--gb);
   border-radius:16px;cursor:pointer;transition:all .2s;min-width:72px;}
 .app:hover{transform:translateY(-3px);background:var(--gh);}
+.app:active{transform:scale(.93);filter:brightness(1.4);transition:all .08s;}
 .ai{width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .ai svg{width:38px;height:38px;display:block;}
 .an{font-size:10px;color:var(--muted);font-weight:500;}
@@ -616,7 +617,7 @@ html,body{height:100%;font-family:-apple-system,'SF Pro Display','Segoe UI',sans
     <div class="app st"><span class="ai"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="stg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6E0FBF"/><stop offset="100%" stop-color="#3B0870"/></linearGradient></defs><rect width="36" height="36" rx="7" fill="url(#stg)"/><text x="18" y="16.5" text-anchor="middle" fill="white" font-size="10" font-family="Arial,sans-serif" font-weight="900">STC</text><text x="18" y="27.5" text-anchor="middle" fill="white" font-size="10" font-family="Arial,sans-serif" font-weight="900">tv</text></svg></span><span class="an">STC TV</span></div>
 
     <!-- Radio toggle -->
-    <div class="app mk" id="app-mk" style="position:relative;">
+    <div class="app mk" id="app-mk" style="position:relative;" onclick="window.toggleRadio?.()">
       <span class="ai" id="radio-app-ico"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect width="36" height="36" rx="7" fill="#052e16"/><rect x="8" y="21" width="20" height="10" rx="2.5" fill="none" stroke="#4ade80" stroke-width="1.6"/><circle cx="14" cy="26" r="2.5" fill="none" stroke="#4ade80" stroke-width="1.6"/><line x1="20" y1="24" x2="27" y2="24" stroke="#4ade80" stroke-width="1.3" stroke-linecap="round"/><line x1="20" y1="27" x2="27" y2="27" stroke="#4ade80" stroke-width="1.3" stroke-linecap="round"/><path d="M11 17c2-3 12-3 14 0" fill="none" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"/><path d="M7 13c4-6 18-6 22 0" fill="none" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"/></svg></span>
       <span class="an" id="radio-app-lbl">Radio Off</span>
       <span id="radio-app-dot" style="position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:#6b7280;"></span>
