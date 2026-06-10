@@ -971,7 +971,7 @@ function bindMediaControls(entity, selector) {
 const _radioEntity = () => {
   const L = window.__layout;
   const radioApp = L?.media?.apps?.find(a => a.id === 'mk');
-  return radioApp?.entity ?? L?.media?.radioBoolean ?? 'switch.radio_on_sw';
+  return radioApp?.entity ?? L?.media?.radioBoolean ?? 'input_boolean.radio_on_sw';
 };
 window.toggleRadio = () => { const e = _radioEntity(); callHA(e.split('.')[0],'toggle',e); };
 
