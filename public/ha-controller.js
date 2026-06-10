@@ -876,18 +876,28 @@ function _updateAcScenes(scenes, entity, mode) {
 const _origPop = window.pop;
 // pop() is defined in index.html inline as well — override on module load
 document.addEventListener('DOMContentLoaded', () => {
-  // bind app icons from layout
+  // bind app icons — layout config overrides, fallback to hardcoded entities
   const L = window.__layout;
-  if (L?.media?.apps) {
-    document.querySelectorAll('.app').forEach(app => {
-      const appId = app.id?.replace('app-','') || [...app.classList].find(c => c !== 'app');
-      const cfg = L.media.apps.find(a => a.id === appId);
-      if (!cfg) return;
+  const _homeAppDefaults = {
+    nf: () => window.haInputBtn('input_button.netflix'),
+    yt: () => window.haInputBtn('input_button.youtube'),
+    sh: () => window.haInputBtn('input_button.shahid'),
+    px: () => window.haInputBtn('input_button.plex'),
+    st: () => window.haInputBtn('input_button.stc_tv'),
+    ml: () => window.haInputBtn('input_button.movielight'),
+    mk: () => window.toggleRadio(),
+  };
+  document.querySelectorAll('.app').forEach(app => {
+    const appId = app.id?.replace('app-','') || [...app.classList].find(c => c !== 'app');
+    const cfg = L?.media?.apps?.find(a => a.id === appId);
+    if (cfg) {
       if (cfg.actionType === 'input_button') app.onclick = () => window.haInputBtn(cfg.entity);
-      else if (cfg.actionType === 'boolean') app.onclick = () => window.haBoolToggle(cfg.entity);
-      else if (cfg.actionType === 'script') app.onclick = () => window.haScript(cfg.entity);
-    });
-  }
+      else if (cfg.actionType === 'boolean')  app.onclick = () => window.haBoolToggle(cfg.entity);
+      else if (cfg.actionType === 'script')   app.onclick = () => window.haScript(cfg.entity);
+    } else if (_homeAppDefaults[appId]) {
+      app.onclick = _homeAppDefaults[appId];
+    }
+  });
   // bind TV page app grid
   document.querySelectorAll('.ta').forEach(ta => {
     const cls = [...ta.classList].find(c => c !== 'ta');
